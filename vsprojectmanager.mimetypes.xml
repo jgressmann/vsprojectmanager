@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<mime-info xmlns='http://www.freedesktop.org/standards/shared-mime-info'>
+  <mime-type type="text/x-msbuild-c-project">
+    <sub-class-of type="text/xml"/>
+    <comment>Visual Studio C++ project file</comment>
+    <glob pattern="*.vcxproj"/>
+    <glob pattern="*.vcproj"/>
+  </mime-type>
+</mime-info>

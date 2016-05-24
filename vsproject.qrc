@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/autotoolsproject" >
+        <file>VsProjectManager.mimetypes.xml</file>
+    </qresource>
+</RCC>
