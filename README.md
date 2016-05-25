@@ -17,12 +17,17 @@ Author
 -------
 * Jean Gressmann (jean@0x42.de)
 
-Installation
-------------
+Build
+-----
 * Get the source for [Qt Creator](https://github.com/qtproject/qt-creator)
 * Get this plugin's sources and put them into Qt Creator's plugin directory. 
 * Edit Qt Creator's plugins.pro to include this plugin's project file.
 * Build
+
+Download
+--------
+
+* [Qt Creator 3.6](https://www.dropbox.com/s/7dkpx47bx5kmul1/VsProjectManager.dll?dl=1)
 
 Caveats
 -------
