@@ -107,6 +107,7 @@ VsProject::VsProject(VsManager *manager, const QString &fileName) :
     rootProjectNode()->setDisplayName(projectFilePath().toFileInfo().absoluteDir().dirName());
 
     connect(this, &VsProject::activeTargetChanged, this, &VsProject::handleActiveTargetChanged);
+    connect(m_fileWatcher, &Utils::FileSystemWatcher::fileChanged, this, &VsProject::onFileChanged);
 
     m_fileWatcher->addFile(fileName, Utils::FileSystemWatcher::WatchAllChanges);
 
@@ -176,27 +177,6 @@ ProjectExplorer::Project::RestoreResult VsProject::fromMap(const QVariantMap &ma
 
 void VsProject::loadProjectTree()
 {
-//    if (m_makefileParserThread != 0) {
-//        // The thread is still busy parsing a previus configuration.
-//        // Wait until the thread has been finished and delete it.
-//        // TODO: Discuss whether blocking is acceptable.
-//        disconnect(m_makefileParserThread, &QThread::finished,
-//                   this, &VsProject::parsingFinished);
-//        m_makefileParserThread->wait();
-//        delete m_makefileParserThread;
-//        m_makefileParserThread = 0;
-//    }
-
-//    // Parse the makefile asynchronously in a thread
-//    m_makefileParserThread = new VsProjectFileParserThread(projectFilePath().toString());
-
-//    connect(m_makefileParserThread, &VsProjectFileParserThread::started,
-//            this, &VsProject::parsingStarted);
-
-//    connect(m_makefileParserThread, &VsProjectFileParserThread::finished,
-//            this, &VsProject::parsingFinished);
-//    m_makefileParserThread->start();
-
     parsingStarted();
     delete m_vsProjectData;
     m_vsProjectData = VsProjectData::load(projectFilePath());
@@ -210,14 +190,15 @@ void VsProject::parsingStarted()
 
 void VsProject::parsingFinished()
 {
-
     QApplication::restoreOverrideCursor();
 
-    QList<ProjectExplorer::FileNode*> fileNodes =
-            Utils::transform(m_vsProjectData->files(), [](const QString& filePath) {
+    QList<ProjectExplorer::FileNode*> fileNodes;
+    if (m_vsProjectData) {
+            fileNodes = Utils::transform(m_vsProjectData->files(), [](const QString& filePath) {
         return new ProjectExplorer::FileNode(
                     Utils::FileName::fromString(filePath),
                     getFileType(filePath), false); });
+    }
 
     buildTree(static_cast<VsProjectNode *>(rootProjectNode()), fileNodes);
 
@@ -478,13 +459,14 @@ void VsProject::buildTree(VsProjectNode *rootNode, QList<ProjectExplorer::FileNo
     foreach (ProjectExplorer::FileNode *fn, deleted) {
         ProjectExplorer::FolderNode *parent = fn->parentFolderNode();
         parent->removeFileNodes(QList<ProjectExplorer::FileNode *>() << fn);
+
         // Check for empty parent
-        while (parent->subFolderNodes().isEmpty() && parent->fileNodes().isEmpty()) {
+        while (parent != rootNode &&
+               parent->subFolderNodes().isEmpty() &&
+               parent->fileNodes().isEmpty()) {
             ProjectExplorer::FolderNode *grandparent = parent->parentFolderNode();
             grandparent->removeFolderNodes(QList<ProjectExplorer::FolderNode *>() << parent);
             parent = grandparent;
-            if (parent == rootNode)
-                break;
         }
     }
 }
