@@ -69,7 +69,7 @@ QList<Core::Id> DevenvStepFactory::availableCreationIds(BuildStepList *parent) c
 QString DevenvStepFactory::displayNameForId(Core::Id id) const
 {
     if (id == DEVENV_STEP_ID)
-        return tr("Run Visual Studio", "Display name for VsProjectManager::DevenvStep id.");
+        return tr("Run", "Display name for VsProjectManager::DevenvStep id.");
     return QString();
 }
 
@@ -135,7 +135,7 @@ DevenvStep::DevenvStep(BuildStepList *bsl, DevenvStep *bs) : AbstractProcessStep
 
 void DevenvStep::ctor()
 {
-    setDefaultDisplayName(tr("Visual Studio"));
+    setDefaultDisplayName(tr("Run Visual Studio"));
 }
 
 QVariantMap DevenvStep::toMap() const
@@ -251,7 +251,7 @@ DevenvStepConfigWidget::DevenvStepConfigWidget(DevenvStep *DevenvStep) :
 
 QString DevenvStepConfigWidget::displayName() const
 {
-    return tr("Visual Studio", "VSProjectManager::DevenvStepConfigWidget display name.");
+    return tr("Run", "VSProjectManager::DevenvStepConfigWidget display name.");
 }
 
 QString DevenvStepConfigWidget::summaryText() const
