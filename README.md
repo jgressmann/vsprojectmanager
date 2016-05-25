@@ -27,7 +27,12 @@ Build
 Download
 --------
 
-* [Qt Creator 3.6](https://www.dropbox.com/s/7dkpx47bx5kmul1/VsProjectManager.dll?dl=1)
+* binary for [Qt Creator 3.6](https://www.dropbox.com/s/7dkpx47bx5kmul1/VsProjectManager.dll?dl=1) 
+
+Installation
+------------
+Copy the plugin binary to Qt Creator's plugin directory <Qt Creator dir>lib\qtcreator\plugins
+
 
 Caveats
 -------
