@@ -31,7 +31,7 @@ Download
 
 Installation
 ------------
-Copy the plugin binary to Qt Creator's plugin directory <Qt Creator dir>lib\qtcreator\plugins
+Copy the plugin binary to Qt Creator's plugin directory <Qt Creator dir>\\lib\\qtcreator\\plugins
 
 
 Caveats
