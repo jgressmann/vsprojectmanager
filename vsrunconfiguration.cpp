@@ -68,40 +68,27 @@ const char TITLE_KEY[] = "VsProjectManager.VsRunConfiguration.Title";
 
 VsRunConfiguration::VsRunConfiguration(Target *parent, Core::Id id, const QString &target,
                                              const QString &workingDirectory, const QString &title) :
-#if 0 // 4.0
     RunConfiguration(parent, id),
-#else
-    LocalApplicationRunConfiguration(parent, id),
-#endif
     m_buildTarget(target),
     m_title(title)
 {
-#if 0
+
     addExtraAspect(new LocalEnvironmentAspect(this, LocalEnvironmentAspect::BaseEnvironmentModifier()));
-#else
-    addExtraAspect(new LocalEnvironmentAspect(this));
-#endif
     addExtraAspect(new ArgumentsAspect(this, QStringLiteral("VsProjectManager.VsRunConfiguration.Arguments")));
     addExtraAspect(new TerminalAspect(this, QStringLiteral("VsProjectManager.VsRunConfiguration.UseTerminal")));
 
     auto wd = new WorkingDirectoryAspect(this, QStringLiteral("VsProjectManager.VsRunConfiguration.UserWorkingDirectory"));
 
-#if 0
+
     wd->setDefaultWorkingDirectory(Utils::FileName::fromString(workingDirectory));
-#else
-    wd->setDefaultWorkingDirectory(QDir::fromNativeSeparators(workingDirectory));
-#endif
+
     addExtraAspect(wd);
 
     ctor();
 }
 
 VsRunConfiguration::VsRunConfiguration(Target *parent, VsRunConfiguration *source) :
-    #if 0 // 4.0
-        RunConfiguration(parent, source),
-    #else
-        LocalApplicationRunConfiguration(parent, source),
-    #endif
+    RunConfiguration(parent, source),
     m_buildTarget(source->m_buildTarget),
     m_title(source->m_title),
     m_enabled(source->m_enabled)
@@ -114,7 +101,7 @@ void VsRunConfiguration::ctor()
     setDefaultDisplayName(defaultDisplayName());
 }
 
-#if 0
+
 Runnable VsRunConfiguration::runnable() const
 {
     StandardRunnable r;
@@ -125,25 +112,7 @@ Runnable VsRunConfiguration::runnable() const
     r.runMode = extraAspect<TerminalAspect>()->runMode();
     return r;
 }
-#else
-QString VsRunConfiguration::executable() const
-{
-    return m_buildTarget;
-}
 
-ProjectExplorer::ApplicationLauncher::Mode VsRunConfiguration::runMode() const
-{
-    return extraAspect<TerminalAspect>()->runMode();
-}
-QString VsRunConfiguration::workingDirectory() const
-{
-    return extraAspect<WorkingDirectoryAspect>()->workingDirectory();
-}
-QString VsRunConfiguration::commandLineArguments() const
-{
-    return extraAspect<ArgumentsAspect>()->arguments();
-}
-#endif
 
 QString VsRunConfiguration::baseWorkingDirectory() const
 {
@@ -165,13 +134,8 @@ void VsRunConfiguration::setExecutable(const QString &executable)
 
 void VsRunConfiguration::setBaseWorkingDirectory(const QString &wd)
 {
-#if 0
     extraAspect<WorkingDirectoryAspect>()
         ->setDefaultWorkingDirectory(Utils::FileName::fromString(wd));
-#else
-    extraAspect<WorkingDirectoryAspect>()
-        ->setDefaultWorkingDirectory(QDir::toNativeSeparators(wd));
-#endif
 }
 
 QVariantMap VsRunConfiguration::toMap() const

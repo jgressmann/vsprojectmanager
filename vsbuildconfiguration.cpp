@@ -172,17 +172,6 @@ ProjectExplorer::NamedWidget *VsBuildConfiguration::createConfigWidget()
 {
     return nullptr;
 }
-#if 0
-bool VsBuildConfiguration::isEnabled() const
-{
-    return true;
-}
-
-QString VsBuildConfiguration::disabledReason() const
-{
-    return QString();
-}
-#endif
 
 int VsBuildConfigurationFactory::priority(const ProjectExplorer::Target *parent) const
 {
@@ -324,3 +313,14 @@ VsBuildConfiguration *VsBuildConfigurationFactory::restore(ProjectExplorer::Targ
     delete bc;
     return 0;
 }
+
+bool VsBuildConfiguration::isEnabled() const
+{
+    return true;
+}
+
+QString VsBuildConfiguration::disabledReason() const
+{
+    return QString();
+}
+

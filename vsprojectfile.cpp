@@ -40,52 +40,6 @@ VsProjectFile::VsProjectFile(const QString &fileName, QObject* parent)
     setMimeType(QLatin1String(Constants::MIMETYPE));
     setFilePath(Utils::FileName::fromString(fileName));
 }
-#if 0
-#else
-bool VsProjectFile::save(QString *errorString, const QString &fileName, bool autoSave)
-{
-    // Once we have an texteditor open for this file, we probably do
-    // need to implement this, don't we.
-    Q_UNUSED(errorString)
-    Q_UNUSED(fileName)
-    Q_UNUSED(autoSave)
-    return false;
-}
 
-QString VsProjectFile::defaultPath() const
-{
-    return QString();
-}
-
-QString VsProjectFile::suggestedFileName() const
-{
-    return QString();
-}
-
-bool VsProjectFile::isModified() const
-{
-    return false;
-}
-
-bool VsProjectFile::isSaveAsAllowed() const
-{
-    return false;
-}
-
-Core::IDocument::ReloadBehavior VsProjectFile::reloadBehavior(ChangeTrigger state, ChangeType type) const
-{
-    Q_UNUSED(state)
-    Q_UNUSED(type)
-    return BehaviorSilent;
-}
-
-bool VsProjectFile::reload(QString *errorString, ReloadFlag flag, ChangeType type)
-{
-    Q_UNUSED(errorString)
-    Q_UNUSED(flag)
-    Q_UNUSED(type)
-    return true;
-}
-#endif
 } // namespace Internal
 } // namespace VsProjectManager

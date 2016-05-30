@@ -47,10 +47,8 @@
 #include <projectexplorer/deploymentdata.h>
 #include <extensionsystem/pluginmanager.h>
 #include <cpptools/cppmodelmanager.h>
-#if 0
 #include <cpptools/projectinfo.h>
 #include <cpptools/projectpartbuilder.h>
-#endif
 #include <coreplugin/icore.h>
 #include <coreplugin/icontext.h>
 #include <qtsupport/baseqtversion.h>
@@ -76,12 +74,7 @@ using namespace VsProjectManager::Internal;
 
 VsProject::~VsProject()
 {
-#if 0
     setRootProjectNode(nullptr);
-#else
-    delete m_rootNode;
-
-#endif
 
     m_codeModelFuture.cancel();
     delete m_vsProjectData;
@@ -91,15 +84,10 @@ VsProject::~VsProject()
 VsProject::VsProject(VsManager *manager, const QString &fileName) :
     m_fileWatcher(new Utils::FileSystemWatcher(this))
 {
-#if 0
+
     setProjectManager(manager);
     setDocument(new VsProjectFile(fileName));
     setRootProjectNode(new VsProjectNode(projectFilePath()));
-#else
-    m_file = new VsProjectFile(fileName, this);
-    m_rootNode = new VsProjectNode(projectFilePath());
-    m_manager = manager;
-#endif
     setId(Constants::PROJECT_ID);
     setProjectContext(Core::Context(Constants::PROJECT_CONTEXT));
     setProjectLanguages(Core::Context(ProjectExplorer::Constants::LANG_CXX));
@@ -133,25 +121,17 @@ QStringList VsProject::files(FilesMode fileMode) const
         const bool isGenerated = fn->isGenerated();
         switch (fileMode)
         {
-#if 0
         case ProjectExplorer::Project::SourceFiles:
             return !isGenerated;
         case ProjectExplorer::Project::GeneratedFiles:
             return isGenerated;
-#else
-        case ProjectExplorer::Project::ExcludeGeneratedFiles:
-            return !isGenerated;
-#endif
         case ProjectExplorer::Project::AllFiles:
         default:
             return true;
         }
     });
-#if 0
+
     return Utils::transform(nodes, [](const ProjectExplorer::FileNode* fn) { return fn->filePath().toString(); });
-#else
-    return Utils::transform(nodes, [](const ProjectExplorer::FileNode* fn) { return fn->path().toString(); });
-#endif
 }
 
 // This function, is called at the very beginning, to
@@ -336,12 +316,12 @@ ProjectExplorer::FileType VsProject::getFileType(const QString& fileName)
     return ProjectExplorer::UnknownFileType;
 }
 
-#if 0
+
 bool VsProject::knowsAllBuildExecutables() const
 {
     return false;
 }
-#endif
+
 
 bool VsProject::setupTarget(ProjectExplorer::Target *t)
 {
@@ -424,11 +404,7 @@ void VsProject::handleActiveBuildConfigurationChanged()
 
 static bool sortNodesByPath(ProjectExplorer::Node *a, ProjectExplorer::Node *b)
 {
-#if 0
     return a->filePath() < b->filePath();
-#else
-    return a->path() < b->path();
-#endif
 }
 
 
@@ -450,7 +426,7 @@ void VsProject::buildTree(VsProjectNode *rootNode, QList<ProjectExplorer::FileNo
     // add added nodes
     foreach (ProjectExplorer::FileNode *fn, added) {
         // Get relative path to rootNode
-        QString parentDir = fn->path().toFileInfo().absolutePath();
+        QString parentDir = fn->filePath().toFileInfo().absolutePath();
         ProjectExplorer::FolderNode *folder = findOrCreateFolder(rootNode, parentDir);
         folder->addFileNodes(QList<ProjectExplorer::FileNode *>()<< fn);
     }
@@ -473,11 +449,8 @@ void VsProject::buildTree(VsProjectNode *rootNode, QList<ProjectExplorer::FileNo
 
 ProjectExplorer::FolderNode *VsProject::findOrCreateFolder(VsProjectNode *rootNode, QString directory)
 {
-#if 0
+
     Utils::FileName path = rootNode->filePath().parentDir();
-#else
-    Utils::FileName path = rootNode->path().parentDir();
-#endif
     QDir rootParentDir(path.toString());
     QString relativePath = rootParentDir.relativeFilePath(directory);
     if (relativePath == QLatin1String("."))
@@ -489,11 +462,8 @@ ProjectExplorer::FolderNode *VsProject::findOrCreateFolder(VsProjectNode *rootNo
         // Find folder in subFolders
         bool found = false;
         foreach (ProjectExplorer::FolderNode *folder, parent->subFolderNodes()) {
-#if 0
+
             if (folder->filePath() == path) {
-#else
-            if (folder->path() == path) {
-#endif
                 // yeah found something :)
                 parent = folder;
                 found = true;
@@ -629,20 +599,3 @@ void VsProject::updateTargetRunConfigurations(ProjectExplorer::Target *t)
     t->updateDefaultRunConfigurations();
 }
 
-#if 0
-#else
-Core::IDocument* VsProject::document() const
-{
-    return m_file;
-}
-
-ProjectExplorer::IProjectManager *VsProject::projectManager() const
-{
-    return m_manager;
-}
-
-ProjectExplorer::ProjectNode *VsProject::rootProjectNode() const
-{
-    return m_rootNode;
-}
-#endif

@@ -78,13 +78,7 @@ public:
     static QString defaultBuildDirectory(const QString &projectPath);
     bool needsConfiguration() const override;
     bool requiresTargetPanel() const override;
-#if 0 // 4.0
     bool knowsAllBuildExecutables() const override;
-#else
-    virtual Core::IDocument* document() const override;
-    virtual ProjectExplorer::IProjectManager *projectManager() const override;
-    virtual ProjectExplorer::ProjectNode *rootProjectNode() const override;
-#endif
     bool supportsKit(ProjectExplorer::Kit *k, QString *errorMessage) const override;
     VsProjectData* vsProjectData() const { return m_vsProjectData; }
 
@@ -122,12 +116,6 @@ private:
 
     ProjectExplorer::Target *m_connectedTarget = nullptr;
     VsProjectData* m_vsProjectData = nullptr;
-#if 0
-#else
-    Core::IDocument* m_file;
-    VsProjectNode* m_rootNode;
-    VsManager *m_manager;
-#endif
 };
 
 } // namespace Internal

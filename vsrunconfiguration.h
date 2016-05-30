@@ -26,21 +26,14 @@
 
 #pragma once
 
-#if 0
+
 #include <projectexplorer/runnables.h>
-#else
-#include <projectexplorer/localapplicationrunconfiguration.h>
-#endif
 
 
 namespace VsProjectManager {
 namespace Internal {
 
-#if 0 // 4.0
 class VsRunConfiguration : public ProjectExplorer::RunConfiguration
-#else
-class VsRunConfiguration : public ProjectExplorer::LocalApplicationRunConfiguration
-#endif
 {
     Q_OBJECT
     friend class VsRunConfigurationWidget;
@@ -50,14 +43,8 @@ public:
     VsRunConfiguration(ProjectExplorer::Target *parent, Core::Id id, const QString &target,
                           const QString &workingDirectory, const QString &title);
 
-#if 0 // 4.0
     ProjectExplorer::Runnable runnable() const override;
-#else
-    virtual QString executable() const override;
-    virtual ProjectExplorer::ApplicationLauncher::Mode runMode() const override;
-    virtual QString workingDirectory() const override;
-    virtual QString commandLineArguments() const override;
-#endif
+
     QWidget *createConfigurationWidget() override;
 
     void setExecutable(const QString &executable);

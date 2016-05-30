@@ -165,11 +165,7 @@ void DevenvStep::setConfiguration(const QString& configuration)
     m_configuration = configuration;
 }
 
-#if 0
 bool DevenvStep::init(QList<const BuildStep *> &earlierSteps)
-#else
-bool DevenvStep::init()
-#endif
 {
     BuildConfiguration *bc = buildConfiguration();
     if (!bc)
@@ -198,9 +194,9 @@ bool DevenvStep::init()
     ProcessParameters *pp = processParameters();
     pp->setMacroExpander(bc->macroExpander());
     Utils::Environment env = bc->environment();
-#if 0
-//    Utils::Environment::setupEnglishOutput(&env);
-#endif
+
+    Utils::Environment::setupEnglishOutput(&env);
+
     pp->setEnvironment(env);
     pp->setWorkingDirectory(bc->buildDirectory().toString());
     pp->setCommand(cmd);
@@ -209,11 +205,7 @@ bool DevenvStep::init()
 
     setOutputParser(new MsvcParser());
     outputParser()->setWorkingDirectory(pp->effectiveWorkingDirectory());
-#if 0
     return AbstractProcessStep::init(earlierSteps);
-#else
-    return AbstractProcessStep::init();
-#endif
 }
 
 

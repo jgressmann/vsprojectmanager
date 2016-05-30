@@ -68,11 +68,9 @@ class DevenvStep : public ProjectExplorer::AbstractProcessStep
 
 public:
     explicit DevenvStep(ProjectExplorer::BuildStepList *bsl);
-#if 0
+
     virtual bool init(QList<const BuildStep *> &earlierSteps) override;
-#else
-    virtual bool init() override;
-#endif
+
     void run(QFutureInterface<bool> &interface) override;
     ProjectExplorer::BuildStepConfigWidget *createConfigWidget() override;
     QVariantMap toMap() const override;

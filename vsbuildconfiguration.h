@@ -46,10 +46,8 @@ class VsBuildConfiguration : public ProjectExplorer::BuildConfiguration
 public:
     explicit VsBuildConfiguration(ProjectExplorer::Target *parent);
 
-#if 0
     bool isEnabled() const override;
     QString disabledReason() const override;
-#endif
     ProjectExplorer::NamedWidget *createConfigWidget() override;
 
     QVariantMap toMap() const override;
