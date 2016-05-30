@@ -195,7 +195,7 @@ bool DevenvStep::init(QList<const BuildStep *> &earlierSteps)
     pp->setMacroExpander(bc->macroExpander());
     Utils::Environment env = bc->environment();
 
-    Utils::Environment::setupEnglishOutput(&env);
+//    Utils::Environment::setupEnglishOutput(&env);
 
     pp->setEnvironment(env);
     pp->setWorkingDirectory(bc->buildDirectory().toString());
