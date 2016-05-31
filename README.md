@@ -5,13 +5,12 @@ This plugin allows you to open, build, and run Microsoft Visual Studio C++ proje
 
 Requirements
 ------------
-For each project file you are trying to open you need to have the corresponding Visual Studio installed.
+For each project file you need to have the corresponding Visual Studio version installed.
 
-Features
---------
-* Supported Visual Studio versions:
-  - VS2005
-  - VS2010
+Supported Visual Studio versions
+--------------------------------
+* VS2005
+* VS2010
 
 Author
 -------
@@ -27,8 +26,8 @@ Build
 Download
 --------
 
-* binary for [Qt Creator 3.6](https://www.dropbox.com/s/7dkpx47bx5kmul1/VsProjectManager.dll?dl=1) 
-* binary for [Qt Creator 4.0](https://www.dropbox.com/s/7hx171zhimgz0mw/VsProjectManager.dll?dl=1)
+* binary for [Qt Creator 3.6.1](https://www.dropbox.com/s/7dkpx47bx5kmul1/VsProjectManager.dll?dl=1) 
+* binary for [Qt Creator 4.0.0](https://www.dropbox.com/s/7hx171zhimgz0mw/VsProjectManager.dll?dl=1)
 
 Installation
 ------------
@@ -46,7 +45,7 @@ Restart Qt Creator for the change to take effect.
 
 TODO
 ----
-* Support more Visual Studio versions
+* Support newer Visual Studio versions
 
 
 
