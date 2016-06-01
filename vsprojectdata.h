@@ -124,10 +124,6 @@ private:
         const QDomNodeList& xmlItems,
         const QString& configuration,
         QStringList& files) const;
-    QString substituteVariables(
-            const QString& input,
-            const QString& configuration,
-            const QString& platform) const;
 
 private:
     VsBuildTargets m_targets;

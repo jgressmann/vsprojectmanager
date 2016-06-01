@@ -214,14 +214,27 @@ QString VsProjectData::makeAbsoluteFilePath(const QString& input) const
     return output;
 }
 
-QString VsProjectData::substitute(QString input, const QHash<QString, QString>& sub)
+QString VsProjectData::substitute(QString input, const VariableSubstitution& sub)
 {
-    QHash<QString, QString>::const_iterator it = sub.begin();
-    QHash<QString, QString>::const_iterator end = sub.end();
-    for (; it != end; ++it) {
-        input = input.replace(it.key(), it.value());
+    VariableSubstitution::const_iterator beg = sub.begin();
+    VariableSubstitution::const_iterator end = sub.end();
+    QString output;
+
+    while (1) {
+        output = input;
+
+        for (VariableSubstitution::const_iterator it = beg; it != end; ++it) {
+            output = output.replace(it.key(), it.value());
+        }
+
+        if (output == input) {
+            break;
+        }
+
+        input = output;
     }
-    return input;
+
+    return output;
 }
 
 
@@ -250,20 +263,36 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
         QString platform, configuration;
         splitConfiguration(key, &configuration, &platform);
 
+        VariableSubstitution sub;
+        sub.insert(QLatin1String("$(ConfigurationName)"), configuration);
+        sub.insert(QLatin1String("$(PlatformName)"), platform);
 
-        auto configurationType = configNode.attributes().namedItem(QLatin1String("ConfigurationType")).nodeValue().toInt();
+        sub.insert(QLatin1String("$(ProjectDir)"), projectDirectory().path() + QLatin1String("/"));
+        sub.insert(QLatin1String("$(SolutionDir)"), m_solutionDir  + QLatin1String("/"));
+        sub.insert(QLatin1String("$(ProjectName)"), projectFile.toFileInfo().baseName());
+        sub.insert(QLatin1String("$(OutDir)"), QLatin1String("$(SolutionDir)$(ConfigurationName)/"));
+        sub.insert(QLatin1String("$(IntDir)"), QLatin1String("$(ConfigurationName)/"));
 
 
         VsBuildTarget target;
+        target.configuration = key;
+        target.title = projectFile.toFileInfo().baseName();
+        target.output = QLatin1String("$(OutDir)$(ProjectName)$(TargetExt)");
+        target.outdir = configNode.attributes().namedItem(QLatin1String("OutputDirectory")).nodeValue();
+
+        auto configurationType = configNode.attributes().namedItem(QLatin1String("ConfigurationType")).nodeValue().toInt();
         switch (configurationType) {
         case 1:
             target.targetType = TargetType::ExecutableType;
+            sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".exe"));
             break;
         case 2:
             target.targetType = TargetType::DynamicLibraryType;
+            sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".dll"));
             break;
         case 3:
             target.targetType = TargetType::StaticLibraryType;
+            sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".lib"));
             break;
         case 4:
             target.targetType = TargetType::UtilityType;
@@ -272,13 +301,6 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
             target.targetType = TargetType::Other;
             break;
         }
-
-        target.outdir = substituteVariables(
-                    configNode.attributes().namedItem(QLatin1String("OutputDirectory")).nodeValue(),
-                    configuration,
-                    platform);
-        target.configuration = key;
-        target.title = projectFile.toFileInfo().baseName();
 
         // parse project type (executable), include dirs, defines, c(xx)flags
         auto configNodeChildren = configNode.childNodes();
@@ -334,31 +356,34 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
                     case TargetType::DynamicLibraryType:
                     case TargetType::ExecutableType: {
                             QString outfile = toolNode.attributes().namedItem(QLatin1String("OutputFile")).nodeValue();
-                            outfile = substituteVariables(outfile, configuration, platform);
-                            target.output = makeAbsoluteFilePath(outfile);
+                            if (!outfile.isEmpty()) {
+                                target.output = outfile;
+                            }
                         }
                         break;
                     }
                 } else if (toolName == QLatin1String("VCLibrarianTool")) {
                     if (TargetType::StaticLibraryType == target.targetType) {
                         QString outfile = toolNode.attributes().namedItem(QLatin1String("OutputFile")).nodeValue();
-                        outfile = substituteVariables(outfile, configuration, platform);
-                        target.output = makeAbsoluteFilePath(outfile);
+                        if (!outfile.isEmpty()) {
+                            target.output = outfile;
+                        }
                     }
                 }
             }
         }
 
-
-
         // parse <Files> section in the context of this configuration
         auto filesChildNodes = doc.documentElement().namedItem(QLatin1String("Files")).childNodes();
         parseFilter(filesChildNodes, key, m_files);
 
+        target.outdir = substitute(target.outdir, sub);
+        target.outdir = makeAbsoluteFilePath(target.output);
+        target.output = substitute(target.output, sub);
+        target.output = makeAbsoluteFilePath(target.output);
+
         m_targets << target;
     }
-
-
 
     std::sort(m_files.begin(), m_files.end());
     m_files.erase(std::unique(m_files.begin(), m_files.end()), m_files.end());
@@ -415,29 +440,6 @@ QStringList Vs2005ProjectData::files() const
     return m_files;
 }
 
-//QString Vs2005ProjectData::devenvPath() const
-//{
-//    return m_devenvPath;
-//}
-//QString Vs2005ProjectData::vcvarsPath() const
-//{
-//    return m_vcvarsPath;
-//}
-
-//QStringList Vs2005ProjectData::buildArgs(const QString& configuration) const
-//{
-//    QStringList result;
-//    result << QDir::toNativeSeparators(projectFilePath().toFileInfo().absoluteFilePath()) << QLatin1String("/Build") << configuration;
-//    return result;
-//}
-
-//QStringList Vs2005ProjectData::cleanArgs(const QString& configuration) const
-//{
-//    QStringList result;
-//    result << QDir::toNativeSeparators(projectFilePath().toFileInfo().absoluteFilePath()) << QLatin1String("/Clean") << configuration;
-//    return result;
-//}
-
 void Vs2005ProjectData::buildCmd(const QString& configuration, QString* cmd, QString* args) const
 {
     makeCmd(configuration, QString(), *cmd, *args);
@@ -468,17 +470,6 @@ QStringList Vs2005ProjectData::configurations() const
 {
     return m_configurations;
 }
-
-QString Vs2005ProjectData::substituteVariables(const QString& input, const QString& configuration, const QString& platform) const
-{
-    QString result = input;
-    result.replace(QLatin1String("$(ProjectDir)"), projectDirectory().path() + QLatin1String("/"));
-    result.replace(QLatin1String("$(SolutionDir)"), m_solutionDir  + QLatin1String("/"));
-    result.replace(QLatin1String("$(ConfigurationName)"), configuration);
-    result.replace(QLatin1String("$(PlatformName)"), platform);
-    return result;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////
 Vs2010ProjectData::Vs2010ProjectData(const Utils::FileName& projectFile, const QDomDocument& doc)
@@ -534,12 +525,15 @@ Vs2010ProjectData::Vs2010ProjectData(const Utils::FileName& projectFile, const Q
         VariableSubstitution sub;
         sub.insert(QLatin1String("$(ProjectDir)"), projectDirectory().path() + QLatin1String("/"));
         sub.insert(QLatin1String("$(SolutionDir)"), m_solutionDir  + QLatin1String("/"));
-        sub.insert(QLatin1String("$(TargetName)"), projectFile.toFileInfo().baseName());
+        sub.insert(QLatin1String("$(ProjectName)"), projectFile.toFileInfo().baseName());
+        sub.insert(QLatin1String("$(TargetName)"), QLatin1String("$(ProjectName)"));
+        sub.insert(QLatin1String("$(OutDir)"), QLatin1String("$(SolutionDir)$(Configuration)/"));
+        sub.insert(QLatin1String("$(IntDir)"), QLatin1String("$(Configuration)/"));
 
         VsBuildTarget target;
         target.configuration = configuration;
         target.title = projectFile.toFileInfo().baseName();
-        target.outdir = QLatin1String("$(SolutionDir)$(Configuration)/");
+        target.outdir = QLatin1String("$(OutDir)");
         target.output = QLatin1String("$(OutDir)$(TargetName)$(TargetExt)");
 
         auto condition = QStringLiteral("'$(Configuration)|$(Platform)'=='%1'").arg(configuration);
@@ -626,12 +620,11 @@ Vs2010ProjectData::Vs2010ProjectData(const Utils::FileName& projectFile, const Q
             }
         }
 
-        target.output = substitute(target.output, sub);
-        target.output = makeAbsoluteFilePath(target.output);
         target.outdir = substitute(target.outdir, sub);
         target.outdir = makeAbsoluteFilePath(target.output);
+        target.output = substitute(target.output, sub);
+        target.output = makeAbsoluteFilePath(target.output);
     }
-
 
     std::sort(m_files.begin(), m_files.end());
     m_files.erase(std::unique(m_files.begin(), m_files.end()), m_files.end());
