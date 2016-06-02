@@ -66,10 +66,6 @@ public:
     QStringList compilerOptions;
     QByteArray defines;
     QString outdir;
-
-//    void clear();
-//    static bool fromStringList(const QStringList& str, VsBuildTarget* result = nullptr);
-//    QStringList toStringList() const;
 };
 
 typedef QList<VsBuildTarget> VsBuildTargets;
@@ -139,7 +135,7 @@ private:
 class Vs2010ProjectData : public VsProjectData
 {
 public:
-    Vs2010ProjectData(const Utils::FileName& projectFile, const QDomDocument& doc);
+    Vs2010ProjectData(const Utils::FileName& projectFile, const QDomDocument& doc, const char* toolsEnvVarName);
 
 public:
     virtual VsBuildTargets targets() const override;
@@ -153,7 +149,7 @@ private:
 
 private:
     VsBuildTargets m_targets;
-    QDir m_Vs2010InstallDir;
+    QDir m_InstallDir;
     QStringList m_configurations;
     QStringList m_files;
     QString m_vcvarsPath;

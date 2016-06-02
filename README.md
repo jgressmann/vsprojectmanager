@@ -5,12 +5,15 @@ This plugin allows you to open, build, and run Microsoft Visual Studio C++ proje
 
 Requirements
 ------------
-For each project file you need to have the corresponding Visual Studio version installed.
+To build the project you need to have the corresponding Visual Studio version. For debugging you need to have 
+the [Debugging Tools for Windows](https://msdn.microsoft.com/en-us/library/windows/hardware/ff551063(v=vs.85).aspx) installed.
 
 Supported Visual Studio versions
 --------------------------------
 * VS2005
 * VS2010
+* VS2013
+* VS2015
 
 Author
 -------
@@ -36,17 +39,11 @@ Copy the plugin binary to Qt Creator's plugin directory `<Qt Creator dir>\\lib\\
 
 Caveats
 -------
-If you plan to open VS2010 project files you want to consider changing the file extension used by Qt Creator to store its 
-project settings which defaults to .user as VS2010 also uses that extension to store user related project settings.
+If you plan to open VS2010 or later project files you want to consider changing the file extension used by Qt Creator to store its 
+project settings which defaults to .user as that particular extension conflicts with Visual Studio's user settings.
 
 To change the extension export an environment variable with the name QTC_EXTENSION and set it to something else, e.g. `set QTC_EXTENSION=.qtc`.
 Restart Qt Creator for the change to take effect.
-
-
-TODO
-----
-* Support newer Visual Studio versions
-
 
 
 

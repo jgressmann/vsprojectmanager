@@ -74,65 +74,6 @@ static void DumpXml(FILE* f, const QDomNode& node, int level)
 }
 #endif
 
-//VsBuildTarget::VsBuildTarget()
-//{
-//    clear();
-//}
-
-//void VsBuildTarget::clear()
-//{
-//    configuration.clear();
-//    title.clear();
-//    output.clear();
-//    outdir.clear();
-//    targetType = TargetType::ExecutableType;
-
-//    // code model
-//    includeDirectories.clear();
-//    compilerOptions.clear();
-//    defines.clear();
-//}
-
-//bool VsBuildTarget::fromStringList(const QStringList& str, VsBuildTarget* result)
-//{
-//    VsBuildTarget r;
-//    int index = 0;
-//    if (index >= str.size()) return false;
-//    r.configuration = str[index++];
-//    if (index >= str.size()) return false;
-//    r.title = str[index++];
-//    if (index >= str.size()) return false;
-//    r.output = str[index++];
-//    if (index >= str.size()) return false;
-//    r.outdir = str[index++];
-//    if (index >= str.size()) return false;
-//    r.targetType = (TargetType)(str[index++].toInt());
-//    if (index >= str.size()) return false;
-//    r.includeDirectories = str[index++].split(QLatin1Char(';'), QString::SkipEmptyParts);
-//    if (index >= str.size()) return false;
-//    r.compilerOptions = str[index++].split(QLatin1Char(';'), QString::SkipEmptyParts);
-//    if (index >= str.size()) return false;
-//    r.defines = str[index++].toLocal8Bit();
-
-//    if (result)
-//        *result = r;
-
-//    return true;
-//}
-
-//QStringList VsBuildTarget::toStringList() const
-//{
-//    QStringList result;
-//    result << configuration;
-//    result << title;
-//    result << output;
-//    result << outdir;
-//    result << QString::number(targetType);
-//    result << includeDirectories.join(QLatin1Char(';'));
-//    result << compilerOptions.join(QLatin1Char(';'));
-//    result << QString::fromLocal8Bit(defines);
-//    return result;
-//}
 
 ////////////////////////////////////////////////////////////////////////////////
 VsProjectData::~VsProjectData()
@@ -180,10 +121,13 @@ VsProjectData* VsProjectData::load(const Utils::FileName& projectFilePath)
 
     if (root.nodeName() == QLatin1String("Project")) {
         auto version = root.attributes().namedItem(QLatin1String("ToolsVersion")).nodeValue().replace(QLatin1Char(','), QLatin1Char('.'));
-        if (version == QLatin1String("4.0")) {
-            return new Vs2010ProjectData(projectFilePath, doc);
+        if (version == QLatin1String("4.0")) { // VS2010
+            return new Vs2010ProjectData(projectFilePath, doc, "VS100COMNTOOLS");
+        } else if (version == QLatin1String("12.0")) { // VS2013
+            return new Vs2010ProjectData(projectFilePath, doc, "VS120COMNTOOLS");
+        } else if (version == QLatin1String("14.0")) { // VS2015
+            return new Vs2010ProjectData(projectFilePath, doc, "VS140COMNTOOLS");
         } else {
-            qWarning("Don't know how to parse tools version %s project files", qPrintable(version));
             return nullptr;
         }
     }
@@ -472,15 +416,18 @@ QStringList Vs2005ProjectData::configurations() const
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-Vs2010ProjectData::Vs2010ProjectData(const Utils::FileName& projectFile, const QDomDocument& doc)
+Vs2010ProjectData::Vs2010ProjectData(
+        const Utils::FileName& projectFile,
+        const QDomDocument& doc,
+        const char* toolsEnvVarName)
     : VsProjectData(projectFile, doc)
 {
-    auto vs2010ToolsPath = qgetenv("VS100COMNTOOLS");
-    m_Vs2010InstallDir = QDir(QString::fromLocal8Bit(vs2010ToolsPath));
-    m_Vs2010InstallDir.cdUp();
-    m_Vs2010InstallDir.cdUp();
+    auto toolsPath = qgetenv(toolsEnvVarName);
+    m_InstallDir = QDir(QString::fromLocal8Bit(toolsPath));
+    m_InstallDir.cdUp();
+    m_InstallDir.cdUp();
 
-    m_vcvarsPath  = QDir::toNativeSeparators(m_Vs2010InstallDir.absoluteFilePath(QLatin1String("VC/vcvarsall.bat")));
+    m_vcvarsPath  = QDir::toNativeSeparators(m_InstallDir.absoluteFilePath(QLatin1String("VC/vcvarsall.bat")));
     m_solutionDir = projectDirectory().path();
 
     auto childNodes = doc.documentElement().childNodes();
@@ -506,10 +453,18 @@ Vs2010ProjectData::Vs2010ProjectData(const Utils::FileName& projectFile, const Q
                         if (childNode.isElement()) {
                             auto element = childNode.toElement();
                             auto name = element.nodeName();
-                            if (name == QLatin1String("ClCompile") ||
-                                name == QLatin1String("None") ||
+                            if (/* VS2010 */
+                                name == QLatin1String("ClCompile") ||
                                 name == QLatin1String("Midl") ||
-                                name == QLatin1String("ResourceCompile")) {
+                                name == QLatin1String("None") ||
+                                name == QLatin1String("ResourceCompile") ||
+                                /* VS2013 (and up?) */
+                                name == QLatin1String("ClInclude") ||
+                                name == QLatin1String("FxCompile") /* shaders */ ||
+                                name == QLatin1String("Image") ||
+                                name == QLatin1String("Text") ||
+                                name == QLatin1String("Xml") ||
+                                false) {
                                 m_files << makeAbsoluteFilePath(element.attribute(QLatin1String("Include")));
                             }
                         }
@@ -567,6 +522,16 @@ Vs2010ProjectData::Vs2010ProjectData(const Utils::FileName& projectFile, const Q
                                 target.targetType = TargetType::UtilityType;
                             } else {
                                 target.targetType = TargetType::Other;
+                            }
+
+                            auto charsetNode = element.namedItem(QLatin1String("CharacterSet"));
+                            if (charsetNode.isElement()) {
+                                auto charset = charsetNode.childNodes().at(0).nodeValue();
+                                if (charset == QLatin1String("Unicode")) {
+                                    target.defines += "#define _UNICODE\n#define UNICODE\n";
+                                } else if (charset == QLatin1String("MultiByte")) {
+                                    target.defines += "#define _MBCS\n";
+                                }
                             }
                         }
                     } else {
@@ -630,13 +595,10 @@ Vs2010ProjectData::Vs2010ProjectData(const Utils::FileName& projectFile, const Q
     m_files.erase(std::unique(m_files.begin(), m_files.end()), m_files.end());
 }
 
-
-
 VsBuildTargets Vs2010ProjectData::targets() const
 {
     return m_targets;
 }
-
 
 QStringList Vs2010ProjectData::files() const
 {
@@ -662,9 +624,8 @@ void Vs2010ProjectData::makeCmd(const QString& configuration, const QString& bui
     // Need to clear VISUALSTUDIOVERSION env var, else wrong msbuild might be picked up
     // https://connect.microsoft.com/VisualStudio/feedback/details/806393/error-trying-to-build-using-msbuild-from-code
     cmd = QLatin1String("%comspec%");
-    args = QString::fromLatin1("/c \"set \"VISUALSTUDIOVERSION=\" & call \"%1\" & %2 \"%3\" /nologo %4 /p:Configuration=\"%5\" /p:Platform=\"%6\"\"").arg(
+    args = QString::fromLatin1("/c \"set \"VISUALSTUDIOVERSION=\" & call \"%1\" & msbuild \"%2\" /nologo %3 /p:Configuration=\"%4\" /p:Platform=\"%5\"\"").arg(
                 m_vcvarsPath,
-                QLatin1String("msbuild"),
                 QDir::toNativeSeparators(projectFilePath().toFileInfo().absoluteFilePath()),
                 buildSwitch,
                 configurationName,

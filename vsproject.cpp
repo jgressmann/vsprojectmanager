@@ -71,20 +71,17 @@ using namespace VsProjectManager;
 using namespace VsProjectManager::Internal;
 
 
-
 VsProject::~VsProject()
 {
     setRootProjectNode(nullptr);
 
     m_codeModelFuture.cancel();
     delete m_vsProjectData;
-
 }
 
 VsProject::VsProject(VsManager *manager, const QString &fileName) :
     m_fileWatcher(new Utils::FileSystemWatcher(this))
 {
-
     setProjectManager(manager);
     setDocument(new VsProjectFile(fileName));
     setRootProjectNode(new VsProjectNode(projectFilePath()));
