@@ -252,6 +252,21 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
             break;
         }
 
+        auto charset = configNode.attributes().namedItem(QLatin1String("CharacterSet")).nodeValue().toInt();
+        switch (charset) {
+        case 1:
+            target.defines += "#define _UNICODE\n#define UNICODE\n";
+            break;
+        case 2:
+            target.defines += "#define _MBCS\n";
+            break;
+        }
+
+        auto useOfMfc = configNode.attributes().namedItem(QLatin1String("UseOfMFC")).nodeValue().toInt();
+        if (useOfMfc == 2) { // shared DLL
+            target.defines += "#define _AFXDLL\n";
+        }
+
         // parse project type (executable), include dirs, defines, c(xx)flags
         auto configNodeChildren = configNode.childNodes();
         for (auto j = 0; j < configNodeChildren.count(); ++j) {
