@@ -181,7 +181,7 @@ bool DevenvStep::init(QList<const BuildStep *> &earlierSteps)
     auto project = static_cast<VsProject*>(bc->target()->project());
     QString cmd;
     QString args;
-    if (project) {
+	if (project && project->vsProjectData()) {
         if (m_clean) {
             project->vsProjectData()->cleanCmd(bc->displayName(), &cmd, &args);
         } else {
