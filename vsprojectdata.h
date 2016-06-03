@@ -95,6 +95,7 @@ protected:
     const QDomDocument& doc() const { return m_doc; }
     const Utils::FileName& projectFilePath() const { return m_projectFilePath; }
     const QDir& projectDirectory() const { return m_projectDirectory; }
+    static void addDefaultIncludeDirectories(QStringList& includes, const QDir& vsInstallDir);
 
 private:
     QDomDocument m_doc;

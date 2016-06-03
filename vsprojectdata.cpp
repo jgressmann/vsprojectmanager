@@ -181,6 +181,12 @@ QString VsProjectData::substitute(QString input, const VariableSubstitution& sub
     return output;
 }
 
+void VsProjectData::addDefaultIncludeDirectories(QStringList& includes, const QDir& vsInstallDir)
+{
+    includes << vsInstallDir.absolutePath() + QLatin1String("/VC/include");
+    includes << vsInstallDir.absolutePath() + QLatin1String("/VC/atlmfc/include");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const QDomDocument& doc)
@@ -268,8 +274,7 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
                     }
 
                     // default includes
-                    target.includeDirectories.append(m_Vs2005InstallDir.absolutePath() + QLatin1String("/VC/include"));
-                    target.includeDirectories.append(m_Vs2005InstallDir.absolutePath() + QLatin1String("/VC/atlmfc/include"));
+                    addDefaultIncludeDirectories(target.includeDirectories, m_Vs2005InstallDir);
                     target.includeDirectories.append(m_Vs2005InstallDir.absolutePath() + QLatin1String("/VC/PlatformSDK/include"));
 
                     auto defines = configChildNode.attributes().namedItem(QLatin1String("PreprocessorDefinitions")).nodeValue().split(QLatin1Char(';'));
@@ -485,19 +490,22 @@ Vs2010ProjectData::Vs2010ProjectData(
         sub.insert(QLatin1String("$(OutDir)"), QLatin1String("$(SolutionDir)$(Configuration)/"));
         sub.insert(QLatin1String("$(IntDir)"), QLatin1String("$(Configuration)/"));
 
-        VsBuildTarget target;
-        target.configuration = configuration;
-        target.title = projectFile.toFileInfo().baseName();
-        target.outdir = QLatin1String("$(OutDir)");
-        target.output = QLatin1String("$(OutDir)$(TargetName)$(TargetExt)");
-
-        auto condition = QStringLiteral("'$(Configuration)|$(Platform)'=='%1'").arg(configuration);
         QString platformName, configurationName;
         splitConfiguration(configuration, &configurationName, &platformName);
         sub.insert(QLatin1String("$(Configuration)"), configurationName);
         sub.insert(QLatin1String("$(ConfigurationName)"), configurationName);
         sub.insert(QLatin1String("$(Platform)"), platformName);
         sub.insert(QLatin1String("$(PlatformName)"), platformName);
+
+        VsBuildTarget target;
+        target.configuration = configuration;
+        target.title = projectFile.toFileInfo().baseName();
+        target.outdir = QLatin1String("$(OutDir)");
+        target.output = QLatin1String("$(OutDir)$(TargetName)$(TargetExt)");
+
+        addDefaultIncludeDirectories(target.includeDirectories, m_InstallDir);
+
+        auto condition = QStringLiteral("'$(Configuration)|$(Platform)'=='%1'").arg(configuration);
 
         for (auto i = 0; i < childNodes.count(); ++i) {
             auto childNode = childNodes.at(i);
