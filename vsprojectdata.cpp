@@ -518,8 +518,6 @@ Vs2010ProjectData::Vs2010ProjectData(
         target.outdir = QLatin1String("$(OutDir)");
         target.output = QLatin1String("$(OutDir)$(TargetName)$(TargetExt)");
 
-        addDefaultIncludeDirectories(target.includeDirectories, m_InstallDir);
-
         auto condition = QStringLiteral("'$(Configuration)|$(Platform)'=='%1'").arg(configuration);
 
         for (auto i = 0; i < childNodes.count(); ++i) {
@@ -529,35 +527,46 @@ Vs2010ProjectData::Vs2010ProjectData(
                 QString elementName = element.nodeName();
                 if (elementName == QLatin1String("PropertyGroup")) {
                     if (element.hasAttributes()) {
-                        if (element.attribute(QLatin1String("Label")) == QLatin1String("Configuration") &&
-                            element.attribute(QLatin1String("Condition")) == condition) {
-                            QString configurationType = element.namedItem(QLatin1String("ConfigurationType")).childNodes().at(0).nodeValue();
-                            if (configurationType == QLatin1String("Application")) {
-                                target.targetType = TargetType::ExecutableType;
-                                sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".exe"));
-                            } else if (configurationType == QLatin1String("DynamicLibrary")) {
-                                target.targetType = TargetType::DynamicLibraryType;
-                                sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".dll"));
-                            } else if (configurationType == QLatin1String("StaticLibrary")) {
-                                target.targetType = TargetType::StaticLibraryType;
-                                sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".lib"));
-                            } else if (configurationType == QLatin1String("Utility")) {
-                                target.targetType = TargetType::UtilityType;
-                            } else {
-                                target.targetType = TargetType::Other;
-                            }
+                        if (element.attribute(QLatin1String("Condition")) == condition) {
+                            if (element.hasAttributes()) {
+                                if (element.attribute(QLatin1String("Label")) == QLatin1String("Configuration")) {
+                                    QString configurationType = element.namedItem(QLatin1String("ConfigurationType")).childNodes().at(0).nodeValue();
+                                    if (configurationType == QLatin1String("Application")) {
+                                        target.targetType = TargetType::ExecutableType;
+                                        sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".exe"));
+                                    } else if (configurationType == QLatin1String("DynamicLibrary")) {
+                                        target.targetType = TargetType::DynamicLibraryType;
+                                        sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".dll"));
+                                    } else if (configurationType == QLatin1String("StaticLibrary")) {
+                                        target.targetType = TargetType::StaticLibraryType;
+                                        sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".lib"));
+                                    } else if (configurationType == QLatin1String("Utility")) {
+                                        target.targetType = TargetType::UtilityType;
+                                    } else {
+                                        target.targetType = TargetType::Other;
+                                    }
 
-                            auto charsetNode = element.namedItem(QLatin1String("CharacterSet"));
-                            if (charsetNode.isElement()) {
-                                auto charset = charsetNode.childNodes().at(0).nodeValue();
-                                if (charset == QLatin1String("Unicode")) {
-                                    target.defines += "#define _UNICODE\n#define UNICODE\n";
-                                } else if (charset == QLatin1String("MultiByte")) {
-                                    target.defines += "#define _MBCS\n";
+                                    auto charsetNode = element.namedItem(QLatin1String("CharacterSet"));
+                                    if (charsetNode.isElement()) {
+                                        auto charset = charsetNode.childNodes().at(0).nodeValue();
+                                        if (charset == QLatin1String("Unicode")) {
+                                            target.defines += "#define _UNICODE\n#define UNICODE\n";
+                                        } else if (charset == QLatin1String("MultiByte")) {
+                                            target.defines += "#define _MBCS\n";
+                                        }
+                                    }
+
+                                    auto useOfMfcNode = element.namedItem(QLatin1String("UseOfMfc"));
+                                    if (useOfMfcNode.isElement()) {
+                                        auto useOfMfc = useOfMfcNode.childNodes().at(0).nodeValue();
+                                        if (useOfMfc == QLatin1String("Dynamic")) {
+                                            target.defines += "#define _AFXDLL\n";
+                                        }
+                                    }
                                 }
                             }
                         }
-                    } else {
+                    } else { // no attributes
                         auto propertyGroupChildNodes = element.childNodes();
                         for (auto i = 0; i < propertyGroupChildNodes.count(); ++i) {
                             auto childNode = propertyGroupChildNodes.at(i);
@@ -598,6 +607,18 @@ Vs2010ProjectData::Vs2010ProjectData(
                             target.includeDirectories << makeAbsoluteFilePath(include);
                         }
 
+                        auto runtimeLibrary = compileElement.namedItem(QLatin1String("RuntimeLibrary")).childNodes().at(0).nodeValue();
+                        if (QLatin1String("MultiThreadedDLL") == runtimeLibrary) {
+                            target.compilerOptions << QLatin1String("/MD");
+                        } else if (QLatin1String("MultiThreadedDebugDLL") == runtimeLibrary) {
+                            target.compilerOptions << QLatin1String("/MDd");
+                        } else if (QLatin1String("MultiThreaded") == runtimeLibrary) {
+                            target.compilerOptions << QLatin1String("/MT");
+                        } else if (QLatin1String("MultiThreadedDebug") == runtimeLibrary) {
+                            target.compilerOptions << QLatin1String("/MTd");
+                        }
+
+
                         QDomElement linkElement = element.namedItem(QLatin1String("Link")).toElement();
                         auto outputFileNode = linkElement.namedItem(QLatin1String("OutputFile"));
                         if (outputFileNode.isElement()) {
@@ -607,6 +628,8 @@ Vs2010ProjectData::Vs2010ProjectData(
                 }
             }
         }
+
+        addDefaultIncludeDirectories(target.includeDirectories, m_InstallDir);
 
         target.outdir = substitute(target.outdir, sub);
         target.outdir = makeAbsoluteFilePath(target.output);
