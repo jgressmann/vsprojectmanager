@@ -29,15 +29,15 @@
 #include <projectexplorer/projectnodes.h>
 
 
+#include <QFileInfo>
 #include <QDir>
 #include <QList>
 #include <QStringList>
 #include <QDomDocument>
 #include <QHash>
+#include <QProcess>
 
 #include <utils/fileutils.h>
-
-class QFileInfo;
 
 
 namespace VsProjectManager {
@@ -59,21 +59,23 @@ public:
     QString configuration;
     QString title;
     QString output;
+    QString outdir;
     TargetType targetType;
 
     // code model
     QStringList includeDirectories;
     QStringList compilerOptions;
     QByteArray defines;
-    QString outdir;
 };
 
 typedef QList<VsBuildTarget> VsBuildTargets;
 
-class VsProjectData
+class VsProjectData : public QObject
 {
+    Q_OBJECT
 public:
     typedef QHash<QString, QString> VariableSubstitution;
+
 public:
     virtual ~VsProjectData();
     static VsProjectData* load(const Utils::FileName& projectFile);
@@ -84,23 +86,34 @@ public:
     virtual QStringList files() const = 0;
     virtual void buildCmd(const QString& configuration, QString* cmd, QString* args) const = 0;
     virtual void cleanCmd(const QString& configuration, QString* cmd, QString* args) const = 0;
-
-    static void splitConfiguration(const QString& configuration, QString* configurationName, QString* platformName);
-    QString makeAbsoluteFilePath(const QString& path) const;
-    static QString substitute(QString input, const VariableSubstitution& sub);
-
+    void openInDevenv();
 
 protected:
     VsProjectData(const Utils::FileName& projectFile, const QDomDocument& doc);
+
+protected:
+    static void splitConfiguration(const QString& configuration, QString* configurationName, QString* platformName);
+    QString makeAbsoluteFilePath(const QString& path) const;
+    static QString substitute(QString input, const VariableSubstitution& sub);
     const QDomDocument& doc() const { return m_doc; }
     const Utils::FileName& projectFilePath() const { return m_projectFilePath; }
     const QDir& projectDirectory() const { return m_projectDirectory; }
-    static void addDefaultIncludeDirectories(QStringList& includes, const QDir& vsInstallDir);
+    void addDefaultIncludeDirectories(QStringList& includes) const;
+    void setInstallDir(const QDir& dir) { m_installDirectory = dir; }
+    const QDir& installDir() const { return m_installDirectory; }
+
+private:
+    void devenvProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void devenvProcessErrorOccurred(QProcess::ProcessError error);
+    void releaseDevenvProcess();
 
 private:
     QDomDocument m_doc;
     Utils::FileName m_projectFilePath;
     QDir m_projectDirectory;
+    QDir m_installDirectory;
+
+    QProcess* m_devenvProcess = nullptr;
 };
 
 class Vs2005ProjectData : public VsProjectData
@@ -124,7 +137,6 @@ private:
 
 private:
     VsBuildTargets m_targets;
-    QDir m_Vs2005InstallDir;
     QStringList m_configurations;
     QStringList m_files;
     QString m_devenvPath;
@@ -150,7 +162,6 @@ private:
 
 private:
     VsBuildTargets m_targets;
-    QDir m_InstallDir;
     QStringList m_configurations;
     QStringList m_files;
     QString m_vcvarsPath;

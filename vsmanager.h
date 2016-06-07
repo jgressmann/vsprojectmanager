@@ -31,13 +31,22 @@
 namespace VsProjectManager {
 namespace Internal {
 
+class VsProject;
 class VsManager : public ProjectExplorer::IProjectManager
 {
     Q_OBJECT
 
 public:
-    ProjectExplorer::Project *openProject(const QString &fileName, QString *errorString) override;
-    QString mimeType() const override;
+    virtual ProjectExplorer::Project *openProject(const QString &fileName, QString *errorString) override;
+    virtual QString mimeType() const override;
+
+    void setContextProject(VsProject* project);
+
+public slots:
+    void openInDevenvContextMenu();
+
+private:
+    VsProject* m_contextProject = nullptr;
 };
 
 } // namespace Internal

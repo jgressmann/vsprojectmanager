@@ -31,6 +31,7 @@ namespace VsProjectManager {
  * Collects project constants, that are shared between several classes.
  */
 namespace Constants {
+    const char OPENINDEVENVCONTEXTMENU[] = "VsProjectManager.OpenInDevenvContextMenu";
     const char MIMETYPE[] = "text/x-msbuild-c-project";
 
 //BuildConfiguration

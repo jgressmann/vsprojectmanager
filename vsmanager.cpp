@@ -50,5 +50,18 @@ QString VsManager::mimeType() const
     return QLatin1String(Constants::MIMETYPE);
 }
 
+void VsManager::openInDevenvContextMenu()
+{
+    if (m_contextProject && m_contextProject->vsProjectData())
+    {
+        m_contextProject->vsProjectData()->openInDevenv();
+    }
+}
+
+void VsManager::setContextProject(VsProject* project)
+{
+    m_contextProject = project;
+}
+
 } // namespace Internal
 } // namespace VsProjectManager

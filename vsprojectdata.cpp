@@ -26,12 +26,11 @@
 
 #include "vsprojectdata.h"
 
-#include <QDir>
 #include <QFile>
-#include <QFileInfo>
-
 
 #include <algorithm>
+
+#include <Windows.h>
 
 #ifndef _countof
 #   define _countof(x) ((sizeof(x)/sizeof(x[0])))
@@ -44,13 +43,17 @@ namespace Internal {
 
 #ifdef VSDEBUG
 #include <stdio.h>
-static void Indent(FILE* f, int level)
+#endif
+
+namespace {
+#ifdef VSDEBUG
+void Indent(FILE* f, int level)
 {
     for (int i = 0; i < level; ++i)
         fprintf(f, "  ");
 }
 
-static void DumpXml(FILE* f, const QDomNode& node, int level)
+void DumpXml(FILE* f, const QDomNode& node, int level)
 {
     if (node.isElement()) {
         Indent(f, level); fprintf(f, "<%s", qPrintable(node.nodeName()));
@@ -74,11 +77,48 @@ static void DumpXml(FILE* f, const QDomNode& node, int level)
 }
 #endif
 
+struct HandleData {
+    DWORD processId;
+    HWND bestHandle;
+};
+
+#pragma comment(lib, "User32.lib")
+
+
+BOOL isMainWindow(HWND handle)
+{
+    return GetWindow(handle, GW_OWNER) == (HWND)0 && IsWindowVisible(handle);
+}
+
+
+BOOL CALLBACK enumWindowsCallback(HWND handle, LPARAM lParam)
+{
+    HandleData& data = *(HandleData*)lParam;
+    unsigned long process_id = 0;
+    GetWindowThreadProcessId(handle, &process_id);
+    if (data.processId != process_id || !isMainWindow(handle)) {
+        return TRUE;
+    }
+    data.bestHandle = handle;
+    return FALSE;
+}
+
+HWND findMainWindow(DWORD processId)
+{
+    HandleData data;
+    data.processId = processId;
+    data.bestHandle = nullptr;
+    EnumWindows(enumWindowsCallback, (LPARAM)&data);
+    return data.bestHandle;
+}
+
+} // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 VsProjectData::~VsProjectData()
 {
     // So that the compiler knows where to put the vtable
+    releaseDevenvProcess();
 }
 
 VsProjectData::VsProjectData(const Utils::FileName& projectFilePath, const QDomDocument& doc) :
@@ -95,7 +135,6 @@ VsProjectData* VsProjectData::load(const Utils::FileName& projectFilePath)
         qWarning("%s: %s", qPrintable(info.absoluteFilePath()), qPrintable(file.errorString()));
         return nullptr;
     }
-
 
     QDomDocument doc;
     doc.setContent(&file);
@@ -181,25 +220,66 @@ QString VsProjectData::substitute(QString input, const VariableSubstitution& sub
     return output;
 }
 
-void VsProjectData::addDefaultIncludeDirectories(QStringList& includes, const QDir& vsInstallDir)
+void VsProjectData::addDefaultIncludeDirectories(QStringList& includes) const
 {
-    includes << vsInstallDir.absolutePath() + QLatin1String("/VC/include");
-    includes << vsInstallDir.absolutePath() + QLatin1String("/VC/atlmfc/include");
+    includes << m_installDirectory.absolutePath() + QLatin1String("/VC/include");
+    includes << m_installDirectory.absolutePath() + QLatin1String("/VC/atlmfc/include");
 }
 
+void VsProjectData::openInDevenv()
+{
+    if (!m_devenvProcess) {
+        if (m_installDirectory.exists()) {
+            m_devenvProcess = new QProcess();
+            connect(m_devenvProcess, &QProcess::errorOccurred, this, &VsProjectData::devenvProcessErrorOccurred);
+            connect(m_devenvProcess, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), this, &VsProjectData::devenvProcessFinished);
+            m_devenvProcess->start(
+                        QDir::toNativeSeparators(m_installDirectory.absoluteFilePath(QLatin1String("Common7/IDE/devenv.exe"))),
+                        QStringList() << QDir::toNativeSeparators(m_projectFilePath.toFileInfo().absoluteFilePath()),
+                        QProcess::NotOpen);
+        }
+    } else {
+        HWND mainWindow = findMainWindow(static_cast<DWORD>(m_devenvProcess->processId()));
+        if (mainWindow) {
+            SetForegroundWindow(mainWindow);
+        }
+    }
+}
+
+void VsProjectData::devenvProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    Q_UNUSED(exitCode);
+    Q_UNUSED(exitStatus);
+    releaseDevenvProcess();
+}
+
+void VsProjectData::devenvProcessErrorOccurred(QProcess::ProcessError error)
+{
+    Q_UNUSED(error);
+    releaseDevenvProcess();
+}
+
+void VsProjectData::releaseDevenvProcess()
+{
+    if (m_devenvProcess) {
+        disconnect(m_devenvProcess, &QProcess::errorOccurred, this, &VsProjectData::devenvProcessErrorOccurred);
+        disconnect(m_devenvProcess, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), this, &VsProjectData::devenvProcessFinished);
+        delete m_devenvProcess;
+        m_devenvProcess = nullptr;
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const QDomDocument& doc)
     : VsProjectData(projectFile, doc)
 {
-    auto vs2005ToolsPath = qgetenv("VS80COMNTOOLS");
-    m_Vs2005InstallDir = QDir(QString::fromLocal8Bit(vs2005ToolsPath));
-    m_Vs2005InstallDir.cdUp();
-    m_Vs2005InstallDir.cdUp();
+    auto toolsPath = qgetenv("VS80COMNTOOLS");
+    auto installDir = QDir(QString::fromLocal8Bit(toolsPath));
+    installDir.cdUp();
+    installDir.cdUp();
+    setInstallDir(installDir);
 
-    m_devenvPath  = QDir::toNativeSeparators(m_Vs2005InstallDir.absoluteFilePath(QLatin1String("Common7/IDE/devenv.exe")));
-    m_vcvarsPath  = QDir::toNativeSeparators(m_Vs2005InstallDir.absoluteFilePath(QLatin1String("VC/vcvarsall.bat")));
-
+    m_vcvarsPath  = QDir::toNativeSeparators(installDir.absoluteFilePath(QLatin1String("VC/vcvarsall.bat")));
     m_solutionDir = projectDirectory().path();
 
     auto configurationNodes = doc.documentElement().namedItem(QLatin1String("Configurations")).childNodes();
@@ -289,8 +369,8 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
                     }
 
                     // default includes
-                    addDefaultIncludeDirectories(target.includeDirectories, m_Vs2005InstallDir);
-                    target.includeDirectories.append(m_Vs2005InstallDir.absolutePath() + QLatin1String("/VC/PlatformSDK/include"));
+                    addDefaultIncludeDirectories(target.includeDirectories);
+                    target.includeDirectories.append(installDir.absolutePath() + QLatin1String("/VC/PlatformSDK/include"));
 
                     auto defines = configChildNode.attributes().namedItem(QLatin1String("PreprocessorDefinitions")).nodeValue().split(QLatin1Char(';'));
                     foreach (const QString& define, defines) {
@@ -443,11 +523,12 @@ Vs2010ProjectData::Vs2010ProjectData(
     : VsProjectData(projectFile, doc)
 {
     auto toolsPath = qgetenv(toolsEnvVarName);
-    m_InstallDir = QDir(QString::fromLocal8Bit(toolsPath));
-    m_InstallDir.cdUp();
-    m_InstallDir.cdUp();
+    auto installDir = QDir(QString::fromLocal8Bit(toolsPath));
+    installDir.cdUp();
+    installDir.cdUp();
+    setInstallDir(installDir);
 
-    m_vcvarsPath  = QDir::toNativeSeparators(m_InstallDir.absoluteFilePath(QLatin1String("VC/vcvarsall.bat")));
+    m_vcvarsPath  = QDir::toNativeSeparators(installDir.absoluteFilePath(QLatin1String("VC/vcvarsall.bat")));
     m_solutionDir = projectDirectory().path();
 
     auto childNodes = doc.documentElement().childNodes();
@@ -629,7 +710,7 @@ Vs2010ProjectData::Vs2010ProjectData(
             }
         }
 
-        addDefaultIncludeDirectories(target.includeDirectories, m_InstallDir);
+        addDefaultIncludeDirectories(target.includeDirectories);
 
         target.outdir = substitute(target.outdir, sub);
         target.outdir = makeAbsoluteFilePath(target.output);

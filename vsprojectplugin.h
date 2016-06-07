@@ -28,9 +28,19 @@
 
 #include <extensionsystem/iplugin.h>
 
+QT_BEGIN_NAMESPACE
+class QAction;
+QT_END_NAMESPACE
+
+namespace ProjectExplorer {
+class Node;
+class Project;
+}
+
 namespace VsProjectManager {
 namespace Internal {
 
+class VsManager;
 class VsProjectPlugin : public ExtensionSystem::IPlugin
 {
     Q_OBJECT
@@ -39,6 +49,13 @@ class VsProjectPlugin : public ExtensionSystem::IPlugin
 public:
     void extensionsInitialized() override;
     bool initialize(const QStringList &arguments, QString *errorString) override;
+
+private:
+    void updateContextActions(ProjectExplorer::Node *node, ProjectExplorer::Project *project);
+
+private:
+    VsManager* m_manager = nullptr;
+    QAction* m_openInDevenvContextMenu = nullptr;
 };
 
 } // namespace Internal
