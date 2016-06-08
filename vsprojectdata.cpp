@@ -180,8 +180,8 @@ void VsProjectData::splitConfiguration(const QString& configuration, QString* co
     QString confName = configuration;
     int pipeIndex;
     if ((pipeIndex = configuration.indexOf(QLatin1String("|"))) >= 0) {
-        platform = configuration.right(pipeIndex);
         confName = configuration.left(pipeIndex);
+        platform = configuration.right(configuration.length() - pipeIndex - 1);
     }
 
     if (platformName) *platformName = platform;
