@@ -422,7 +422,7 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
         parseFilter(filesChildNodes, key, m_files);
 
         target.outdir = substitute(target.outdir, sub);
-        target.outdir = makeAbsoluteFilePath(target.output);
+        target.outdir = makeAbsoluteFilePath(target.outdir);
         target.output = substitute(target.output, sub);
         target.output = makeAbsoluteFilePath(target.output);
 
@@ -714,7 +714,7 @@ Vs2010ProjectData::Vs2010ProjectData(
         addDefaultIncludeDirectories(target.includeDirectories);
 
         target.outdir = substitute(target.outdir, sub);
-        target.outdir = makeAbsoluteFilePath(target.output);
+        target.outdir = makeAbsoluteFilePath(target.outdir);
         target.output = substitute(target.output, sub);
         target.output = makeAbsoluteFilePath(target.output);
 
