@@ -30,11 +30,6 @@
 #include "vsproject.h"
 #include "vsprojectconstants.h"
 
-#if 0
-#include <coreplugin/coreicons.h>
-#else
-#include <QDir>
-#endif
 #include <coreplugin/helpmanager.h>
 #include <qtsupport/qtkitinformation.h>
 #include <projectexplorer/localenvironmentaspect.h>
