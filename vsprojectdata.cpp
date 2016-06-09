@@ -594,6 +594,7 @@ Vs2010ProjectData::Vs2010ProjectData(
         sub.insert(QLatin1String("$(PlatformName)"), platformName);
 
         VsBuildTarget target;
+        target.targetType = TargetType::Other;
         target.configuration = configuration;
         target.title = projectFile.toFileInfo().baseName();
         target.outdir = QLatin1String("$(OutDir)");
@@ -716,6 +717,8 @@ Vs2010ProjectData::Vs2010ProjectData(
         target.outdir = makeAbsoluteFilePath(target.output);
         target.output = substitute(target.output, sub);
         target.output = makeAbsoluteFilePath(target.output);
+
+        m_targets << target;
     }
 
     std::sort(m_files.begin(), m_files.end());
