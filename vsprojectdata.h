@@ -134,6 +134,8 @@ private:
         const QDomNodeList& xmlItems,
         const QString& configuration,
         QStringList& files) const;
+    static QString getDefaultOutputDirectory(const QString& platform);
+    static QString getDefaultIntDirectory(const QString& platform);
 
 private:
     VsBuildTargets m_targets;
@@ -159,6 +161,8 @@ public:
 
 private:
     void makeCmd(const QString& configuration, const QString& buildSwitch, QString& cmd, QString& args) const;
+    static QString getDefaultOutputDirectory(const QString& platform);
+    static QString getDefaultIntDirectory(const QString& platform);
 
 private:
     VsBuildTargets m_targets;

@@ -46,6 +46,23 @@ namespace Internal {
 #endif
 
 namespace {
+
+const QString _Configuration(QStringLiteral("$(Configuration)"));
+const QString _ConfigurationName(QStringLiteral("$(ConfigurationName)"));
+const QString _IntDir(QStringLiteral("$(IntDir)"));
+const QString _OutDir(QStringLiteral("$(OutDir)"));
+const QString _Platform(QStringLiteral("$(Platform)"));
+const QString _PlatformName(QStringLiteral("$(PlatformName)"));
+const QString _ProjectDir(QStringLiteral("$(ProjectDir)"));
+const QString _ProjectName(QStringLiteral("$(ProjectName)"));
+const QString _SolutionDir(QStringLiteral("$(SolutionDir)"));
+const QString _TargetExt(QStringLiteral("$(TargetExt)"));
+const QString _TargetName(QStringLiteral("$(TargetName)"));
+const QString Debug(QStringLiteral("Debug"));
+const QString Release(QStringLiteral("Release"));
+const QString Win32(QStringLiteral("Win32"));
+
+
 #ifdef VSDEBUG
 void Indent(FILE* f, int level)
 {
@@ -176,7 +193,7 @@ VsProjectData* VsProjectData::load(const Utils::FileName& projectFilePath)
 
 void VsProjectData::splitConfiguration(const QString& configuration, QString* configurationName, QString* platformName)
 {
-    QString platform = QLatin1String("Win32");
+    QString platform = Win32;
     QString confName = configuration;
     int pipeIndex;
     if ((pipeIndex = configuration.indexOf(QLatin1String("|"))) >= 0) {
@@ -294,35 +311,34 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
         splitConfiguration(key, &configuration, &platform);
 
         VariableSubstitution sub;
-        sub.insert(QLatin1String("$(ConfigurationName)"), configuration);
-        sub.insert(QLatin1String("$(PlatformName)"), platform);
-
-        sub.insert(QLatin1String("$(ProjectDir)"), projectDirectory().path() + QLatin1String("/"));
-        sub.insert(QLatin1String("$(SolutionDir)"), m_solutionDir  + QLatin1String("/"));
-        sub.insert(QLatin1String("$(ProjectName)"), projectFile.toFileInfo().baseName());
-        sub.insert(QLatin1String("$(OutDir)"), QLatin1String("$(SolutionDir)$(ConfigurationName)/"));
-        sub.insert(QLatin1String("$(IntDir)"), QLatin1String("$(ConfigurationName)/"));
+        sub.insert(_ConfigurationName, configuration);
+        sub.insert(_PlatformName, platform);
+        sub.insert(_ProjectDir, projectDirectory().path() + QLatin1String("/"));
+        sub.insert(_SolutionDir, m_solutionDir  + QLatin1String("/"));
+        sub.insert(_ProjectName, projectFile.toFileInfo().baseName());
+        sub.insert(_OutDir, getDefaultOutputDirectory(platform));
+        sub.insert(_IntDir, getDefaultIntDirectory(platform));
 
 
         VsBuildTarget target;
         target.configuration = key;
         target.title = projectFile.toFileInfo().baseName();
-        target.output = QLatin1String("$(OutDir)$(ProjectName)$(TargetExt)");
+        target.output = _OutDir + _ProjectName + _TargetExt;
         target.outdir = configNode.attributes().namedItem(QLatin1String("OutputDirectory")).nodeValue();
 
         auto configurationType = configNode.attributes().namedItem(QLatin1String("ConfigurationType")).nodeValue().toInt();
         switch (configurationType) {
         case 1:
             target.targetType = TargetType::ExecutableType;
-            sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".exe"));
+            sub.insert(_TargetExt, QLatin1String(".exe"));
             break;
         case 2:
             target.targetType = TargetType::DynamicLibraryType;
-            sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".dll"));
+            sub.insert(_TargetExt, QLatin1String(".dll"));
             break;
         case 3:
             target.targetType = TargetType::StaticLibraryType;
-            sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".lib"));
+            sub.insert(_TargetExt, QLatin1String(".lib"));
             break;
         case 4:
             target.targetType = TargetType::UtilityType;
@@ -478,7 +494,6 @@ VsBuildTargets Vs2005ProjectData::targets() const
     return m_targets;
 }
 
-
 QStringList Vs2005ProjectData::files() const
 {
     return m_files;
@@ -513,6 +528,33 @@ void Vs2005ProjectData::makeCmd(const QString& configuration, const QString& bui
 QStringList Vs2005ProjectData::configurations() const
 {
     return m_configurations;
+}
+
+
+QString Vs2005ProjectData::getDefaultOutputDirectory(const QString& platform)
+{
+    QString result = _SolutionDir;
+    if (Win32 != platform) {
+        result += _PlatformName;
+        result += QLatin1Char('/');
+    }
+
+    result += _ConfigurationName;
+    result += QLatin1Char('/');
+    return result;
+}
+
+QString Vs2005ProjectData::getDefaultIntDirectory(const QString& platform)
+{
+    QString result;
+    if (Win32 != platform) {
+        result += _PlatformName;
+        result += QLatin1Char('/');
+    }
+
+    result += _ConfigurationName;
+    result += QLatin1Char('/');
+    return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -577,28 +619,28 @@ Vs2010ProjectData::Vs2010ProjectData(
 
     // 2nd pass to pick up targets
     foreach (const QString& configuration, m_configurations) {
-
-        VariableSubstitution sub;
-        sub.insert(QLatin1String("$(ProjectDir)"), projectDirectory().path() + QLatin1String("/"));
-        sub.insert(QLatin1String("$(SolutionDir)"), m_solutionDir  + QLatin1String("/"));
-        sub.insert(QLatin1String("$(ProjectName)"), projectFile.toFileInfo().baseName());
-        sub.insert(QLatin1String("$(TargetName)"), QLatin1String("$(ProjectName)"));
-        sub.insert(QLatin1String("$(OutDir)"), QLatin1String("$(SolutionDir)$(Configuration)/"));
-        sub.insert(QLatin1String("$(IntDir)"), QLatin1String("$(Configuration)/"));
-
         QString platformName, configurationName;
         splitConfiguration(configuration, &configurationName, &platformName);
-        sub.insert(QLatin1String("$(Configuration)"), configurationName);
-        sub.insert(QLatin1String("$(ConfigurationName)"), configurationName);
-        sub.insert(QLatin1String("$(Platform)"), platformName);
-        sub.insert(QLatin1String("$(PlatformName)"), platformName);
+
+        VariableSubstitution sub;
+        sub.insert(_Configuration, configurationName);
+        sub.insert(_ConfigurationName, configurationName);
+        sub.insert(_Platform, platformName);
+        sub.insert(_PlatformName, platformName);
+        sub.insert(_ProjectDir, projectDirectory().path() + QLatin1String("/"));
+        sub.insert(_SolutionDir, m_solutionDir  + QLatin1String("/"));
+        sub.insert(_ProjectName, projectFile.toFileInfo().baseName());
+        sub.insert(_TargetName, _ProjectName);
+        sub.insert(_OutDir, getDefaultOutputDirectory(platformName));
+        sub.insert(_IntDir, getDefaultIntDirectory(platformName));
+
 
         VsBuildTarget target;
         target.targetType = TargetType::Other;
         target.configuration = configuration;
         target.title = projectFile.toFileInfo().baseName();
-        target.outdir = QLatin1String("$(OutDir)");
-        target.output = QLatin1String("$(OutDir)$(TargetName)$(TargetExt)");
+        target.outdir = _OutDir;
+        target.output = _OutDir + _TargetName + _TargetExt;
 
         auto condition = QStringLiteral("'$(Configuration)|$(Platform)'=='%1'").arg(configuration);
 
@@ -615,13 +657,13 @@ Vs2010ProjectData::Vs2010ProjectData(
                                     QString configurationType = element.namedItem(QLatin1String("ConfigurationType")).childNodes().at(0).nodeValue();
                                     if (configurationType == QLatin1String("Application")) {
                                         target.targetType = TargetType::ExecutableType;
-                                        sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".exe"));
+                                        sub.insert(_TargetExt, QLatin1String(".exe"));
                                     } else if (configurationType == QLatin1String("DynamicLibrary")) {
                                         target.targetType = TargetType::DynamicLibraryType;
-                                        sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".dll"));
+                                        sub.insert(_TargetExt, QLatin1String(".dll"));
                                     } else if (configurationType == QLatin1String("StaticLibrary")) {
                                         target.targetType = TargetType::StaticLibraryType;
-                                        sub.insert(QLatin1String("$(TargetExt)"), QLatin1String(".lib"));
+                                        sub.insert(_TargetExt, QLatin1String(".lib"));
                                     } else if (configurationType == QLatin1String("Utility")) {
                                         target.targetType = TargetType::UtilityType;
                                     } else {
@@ -682,24 +724,32 @@ Vs2010ProjectData::Vs2010ProjectData(
 
                         auto includes = compileElement.namedItem(QLatin1String("AdditionalIncludeDirectories")).childNodes().at(0).nodeValue().split(QLatin1Char(';'));
                         foreach (const QString include, includes) {
-                            if (include == QLatin1String("%(AdditionalIncludeDirectories")) {
+                            if (include == QLatin1String("%(AdditionalIncludeDirectories)")) {
                                 continue;
                             }
 
                             target.includeDirectories << makeAbsoluteFilePath(include);
                         }
 
-                        auto runtimeLibrary = compileElement.namedItem(QLatin1String("RuntimeLibrary")).childNodes().at(0).nodeValue();
-                        if (QLatin1String("MultiThreadedDLL") == runtimeLibrary) {
-                            target.compilerOptions << QLatin1String("/MD");
-                        } else if (QLatin1String("MultiThreadedDebugDLL") == runtimeLibrary) {
-                            target.compilerOptions << QLatin1String("/MDd");
-                        } else if (QLatin1String("MultiThreaded") == runtimeLibrary) {
-                            target.compilerOptions << QLatin1String("/MT");
-                        } else if (QLatin1String("MultiThreadedDebug") == runtimeLibrary) {
-                            target.compilerOptions << QLatin1String("/MTd");
+                        auto runtimeLibraryNode = compileElement.namedItem(QLatin1String("RuntimeLibrary"));
+                        if (runtimeLibraryNode.isElement()) {
+                            auto runtimeLibrary = runtimeLibraryNode.childNodes().at(0).nodeValue();
+                            if (QLatin1String("MultiThreadedDLL") == runtimeLibrary) {
+                                target.compilerOptions << QLatin1String("/MD");
+                            } else if (QLatin1String("MultiThreadedDebugDLL") == runtimeLibrary) {
+                                target.compilerOptions << QLatin1String("/MDd");
+                            } else if (QLatin1String("MultiThreaded") == runtimeLibrary) {
+                                target.compilerOptions << QLatin1String("/MT");
+                            } else if (QLatin1String("MultiThreadedDebug") == runtimeLibrary) {
+                                target.compilerOptions << QLatin1String("/MTd");
+                            }
+                        } else { // omitted, assume defaults derived from configuration names
+                            if (configurationName == Debug) {
+                                target.compilerOptions << QLatin1String("/MDd");
+                            } else if (configurationName == Release) {
+                                target.compilerOptions << QLatin1String("/MD");
+                            }
                         }
-
 
                         QDomElement linkElement = element.namedItem(QLatin1String("Link")).toElement();
                         auto outputFileNode = linkElement.namedItem(QLatin1String("OutputFile"));
@@ -765,6 +815,32 @@ void Vs2010ProjectData::makeCmd(const QString& configuration, const QString& bui
 QStringList Vs2010ProjectData::configurations() const
 {
     return m_configurations;
+}
+
+QString Vs2010ProjectData::getDefaultOutputDirectory(const QString& platform)
+{
+    QString result = _SolutionDir;
+    if (Win32 != platform) {
+        result += _Platform;
+        result += QLatin1Char('/');
+    }
+
+    result += _Configuration;
+    result += QLatin1Char('/');
+    return result;
+}
+
+QString Vs2010ProjectData::getDefaultIntDirectory(const QString& platform)
+{
+    QString result;
+    if (Win32 != platform) {
+        result += _Platform;
+        result += QLatin1Char('/');
+    }
+
+    result += _Configuration;
+    result += QLatin1Char('/');
+    return result;
 }
 
 } // namespace Internal
