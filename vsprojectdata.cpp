@@ -656,7 +656,7 @@ Vs2010ProjectData::Vs2010ProjectData(
                                 QDomElement element = childNode.toElement();
                                 if (element.nodeName() == QLatin1String("TargetName")) {
                                     if (element.attribute(QLatin1String("Condition")) == condition) {
-                                        sub[QLatin1String("TargetName")] = element.childNodes().at(0).nodeValue();
+                                        sub[_TargetName] = element.childNodes().at(0).nodeValue();
                                     }
                                 } else if (element.nodeName() == QLatin1String("OutDir")) {
                                     if (element.attribute(QLatin1String("Condition")) == condition) {
@@ -671,7 +671,7 @@ Vs2010ProjectData::Vs2010ProjectData(
                         QDomElement compileElement = element.namedItem(QLatin1String("ClCompile")).toElement();
                         auto defines = compileElement.namedItem(QLatin1String("PreprocessorDefinitions")).childNodes().at(0).nodeValue().split(QLatin1Char(';'));
                         foreach (const QString define, defines) {
-                            if (define == QLatin1String("%(PreprocessorDefinitions")) {
+                            if (define == QLatin1String("%(PreprocessorDefinitions)")) {
                                 continue;
                             }
 
