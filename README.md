@@ -12,6 +12,7 @@ Supported Visual Studio versions
 --------------------------------
 * VS2005
 * VS2010
+* VS2012
 * VS2013
 * VS2015
 
@@ -31,6 +32,7 @@ Download
 
 * binary for [Qt Creator 3.6.1](https://www.dropbox.com/s/7dkpx47bx5kmul1/VsProjectManager.dll?dl=1)
 * binary for [Qt Creator 4.0.0](https://www.dropbox.com/s/7hx171zhimgz0mw/VsProjectManager.dll?dl=1)
+* binary for [Qt Creator 4.0.1](https://dl.dropboxusercontent.com/u/49168713/vsprojectmanager/4.0.1/VsProjectManager.dll)
 
 Installation
 ------------
@@ -49,3 +51,4 @@ Restart Qt Creator for the change to take effect.
 TODO
 ----
 * Add support to load & build solution files
+* Support more defines / compiler switches
