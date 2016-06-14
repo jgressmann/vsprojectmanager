@@ -29,7 +29,7 @@
 #include <QFile>
 
 #include <algorithm>
-
+#include <stdio.h>
 #include <Windows.h>
 
 #ifndef _countof
@@ -40,10 +40,6 @@ namespace VsProjectManager {
 namespace Internal {
 
 //#define VSDEBUG
-
-#ifdef VSDEBUG
-#include <stdio.h>
-#endif
 
 namespace {
 
@@ -61,6 +57,8 @@ const QString _TargetName(QStringLiteral("$(TargetName)"));
 const QString Debug(QStringLiteral("Debug"));
 const QString Release(QStringLiteral("Release"));
 const QString Win32(QStringLiteral("Win32"));
+const QString x64(QStringLiteral("x64"));
+
 
 
 #ifdef VSDEBUG
@@ -106,7 +104,6 @@ BOOL isMainWindow(HWND handle)
 {
     return GetWindow(handle, GW_OWNER) == (HWND)0 && IsWindowVisible(handle);
 }
-
 
 BOOL CALLBACK enumWindowsCallback(HWND handle, LPARAM lParam)
 {
@@ -178,11 +175,13 @@ VsProjectData* VsProjectData::load(const Utils::FileName& projectFilePath)
     if (root.nodeName() == QLatin1String("Project")) {
         auto version = root.attributes().namedItem(QLatin1String("ToolsVersion")).nodeValue().replace(QLatin1Char(','), QLatin1Char('.'));
         if (version == QLatin1String("4.0")) { // VS2010
-            return new Vs2010ProjectData(projectFilePath, doc, "VS100COMNTOOLS");
+            return new Vs2010ProjectData(projectFilePath, doc, "VS100COMNTOOLS", 1600);
+        } else if (version == QLatin1String("11.0")) { // VS2012
+            return new Vs2010ProjectData(projectFilePath, doc, "VS110COMNTOOLS", 1700);
         } else if (version == QLatin1String("12.0")) { // VS2013
-            return new Vs2010ProjectData(projectFilePath, doc, "VS120COMNTOOLS");
+            return new Vs2010ProjectData(projectFilePath, doc, "VS120COMNTOOLS", 1800);
         } else if (version == QLatin1String("14.0")) { // VS2015
-            return new Vs2010ProjectData(projectFilePath, doc, "VS140COMNTOOLS");
+            return new Vs2010ProjectData(projectFilePath, doc, "VS140COMNTOOLS", 1900);
         } else {
             return nullptr;
         }
@@ -241,6 +240,42 @@ void VsProjectData::addDefaultIncludeDirectories(QStringList& includes) const
 {
     includes << m_installDirectory.absolutePath() + QLatin1String("/VC/include");
     includes << m_installDirectory.absolutePath() + QLatin1String("/VC/atlmfc/include");
+}
+
+void VsProjectData::addDefaultDefines(
+        QByteArray& defines,
+        const QString& platform,
+        RuntimeLibraryType rt) const
+{
+    defines += "#define _WIN32\n";
+    if (Win32 == platform) {
+        defines += "#define _M_IX86\n";
+    }
+
+    if (x64 == platform) {
+        defines += "#define _M_X64\n";
+        defines += "#define _M_AMD64\n"; // not true for VS2005
+        defines += "#define _WIN64\n";
+    }
+
+    switch (rt) {
+    case RTL_MT:
+        defines += "#define _MT\n";
+        break;
+    case RTL_MTd:
+        defines += "#define _MT\n";
+        defines += "#define _DEBUG\n";
+        break;
+    case RTL_MD:
+        defines += "#define _MT\n";
+        defines += "#define _DLL\n";
+        break;
+    case RTL_MDd:
+        defines += "#define _MT\n";
+        defines += "#define _DLL\n";
+        defines += "#define _DEBUG\n";
+        break;
+    }
 }
 
 void VsProjectData::openInDevenv()
@@ -325,28 +360,30 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
         target.title = projectFile.toFileInfo().baseName();
         target.output = _OutDir + _ProjectName + _TargetExt;
         target.outdir = configNode.attributes().namedItem(QLatin1String("OutputDirectory")).nodeValue();
+        target.defines += "#define _MSC_VER=1400\n";
 
         auto configurationType = configNode.attributes().namedItem(QLatin1String("ConfigurationType")).nodeValue().toInt();
         switch (configurationType) {
         case 1:
-            target.targetType = TargetType::ExecutableType;
+            target.targetType = TT_ExecutableType;
             sub.insert(_TargetExt, QLatin1String(".exe"));
             break;
         case 2:
-            target.targetType = TargetType::DynamicLibraryType;
+            target.targetType = TT_DynamicLibraryType;
             sub.insert(_TargetExt, QLatin1String(".dll"));
             break;
         case 3:
-            target.targetType = TargetType::StaticLibraryType;
+            target.targetType = TT_StaticLibraryType;
             sub.insert(_TargetExt, QLatin1String(".lib"));
             break;
         case 4:
-            target.targetType = TargetType::UtilityType;
+            target.targetType = TT_UtilityType;
             break;
         default:
-            target.targetType = TargetType::Other;
+            target.targetType = TT_Other;
             break;
         }
+
 
         auto charset = configNode.attributes().namedItem(QLatin1String("CharacterSet")).nodeValue().toInt();
         switch (charset) {
@@ -390,31 +427,38 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
 
                     auto defines = configChildNode.attributes().namedItem(QLatin1String("PreprocessorDefinitions")).nodeValue().split(QLatin1Char(';'));
                     foreach (const QString& define, defines) {
-                        if (target.defines.size())
-                            target.defines += '\n';
                         target.defines.append("#define ");
                         target.defines.append(define.toLocal8Bit().replace('=', ' '));
+                        target.defines += '\n';
                     }
 
                     auto runtimeLibrary = configChildNode.attributes().namedItem(QLatin1String("RuntimeLibrary")).nodeValue().toInt();
+                    auto rtl = RuntimeLibraryType::RTL_Other;
                     switch (runtimeLibrary) {
                     case 0:
                         target.compilerOptions += QLatin1String("/MT");
+                        rtl = RTL_MT;
                         break;
                     case 1:
                         target.compilerOptions += QLatin1String("/MTd");
+                        rtl = RTL_MTd;
                         break;
                     case 2:
                         target.compilerOptions += QLatin1String("/MD");
+                        rtl = RTL_MD;
                         break;
                     case 3:
                         target.compilerOptions += QLatin1String("/MDd");
+                        rtl = RTL_MDd;
                         break;
                     }
+
+                    addDefaultDefines(target.defines, platform, rtl);
+
                 } else if (toolName == QLatin1String("VCLinkerTool")) {
                     switch (target.targetType) {
-                    case TargetType::DynamicLibraryType:
-                    case TargetType::ExecutableType: {
+                    case TT_DynamicLibraryType:
+                    case TT_ExecutableType: {
                             QString outfile = toolNode.attributes().namedItem(QLatin1String("OutputFile")).nodeValue();
                             if (!outfile.isEmpty()) {
                                 target.output = outfile;
@@ -423,7 +467,7 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
                         break;
                     }
                 } else if (toolName == QLatin1String("VCLibrarianTool")) {
-                    if (TargetType::StaticLibraryType == target.targetType) {
+                    if (TT_StaticLibraryType == target.targetType) {
                         QString outfile = toolNode.attributes().namedItem(QLatin1String("OutputFile")).nodeValue();
                         if (!outfile.isEmpty()) {
                             target.output = outfile;
@@ -561,7 +605,8 @@ QString Vs2005ProjectData::getDefaultIntDirectory(const QString& platform)
 Vs2010ProjectData::Vs2010ProjectData(
         const Utils::FileName& projectFile,
         const QDomDocument& doc,
-        const char* toolsEnvVarName)
+        const char* toolsEnvVarName,
+        unsigned mscVer)
     : VsProjectData(projectFile, doc)
 {
     auto toolsPath = qgetenv(toolsEnvVarName);
@@ -572,6 +617,10 @@ Vs2010ProjectData::Vs2010ProjectData(
 
     m_vcvarsPath  = QDir::toNativeSeparators(installDir.absoluteFilePath(QLatin1String("VC/vcvarsall.bat")));
     m_solutionDir = projectDirectory().path();
+
+    // _MSC_VER
+    char mscVerDefine[32];
+    _snprintf_s(mscVerDefine, _countof(mscVerDefine), _TRUNCATE, "#define _MSC_VER=%u\n", mscVer);
 
     auto childNodes = doc.documentElement().childNodes();
     // first pass to pick up files and configurations
@@ -636,11 +685,12 @@ Vs2010ProjectData::Vs2010ProjectData(
 
 
         VsBuildTarget target;
-        target.targetType = TargetType::Other;
+        target.targetType = TT_Other;
         target.configuration = configuration;
         target.title = projectFile.toFileInfo().baseName();
         target.outdir = _OutDir;
         target.output = _OutDir + _TargetName + _TargetExt;
+        target.defines += mscVerDefine;
 
         auto condition = QStringLiteral("'$(Configuration)|$(Platform)'=='%1'").arg(configuration);
 
@@ -656,18 +706,18 @@ Vs2010ProjectData::Vs2010ProjectData(
                                 if (element.attribute(QLatin1String("Label")) == QLatin1String("Configuration")) {
                                     QString configurationType = element.namedItem(QLatin1String("ConfigurationType")).childNodes().at(0).nodeValue();
                                     if (configurationType == QLatin1String("Application")) {
-                                        target.targetType = TargetType::ExecutableType;
+                                        target.targetType = TT_ExecutableType;
                                         sub.insert(_TargetExt, QLatin1String(".exe"));
                                     } else if (configurationType == QLatin1String("DynamicLibrary")) {
-                                        target.targetType = TargetType::DynamicLibraryType;
+                                        target.targetType = TT_DynamicLibraryType;
                                         sub.insert(_TargetExt, QLatin1String(".dll"));
                                     } else if (configurationType == QLatin1String("StaticLibrary")) {
-                                        target.targetType = TargetType::StaticLibraryType;
+                                        target.targetType = TT_StaticLibraryType;
                                         sub.insert(_TargetExt, QLatin1String(".lib"));
                                     } else if (configurationType == QLatin1String("Utility")) {
-                                        target.targetType = TargetType::UtilityType;
+                                        target.targetType = TT_UtilityType;
                                     } else {
-                                        target.targetType = TargetType::Other;
+                                        target.targetType = TT_Other;
                                     }
 
                                     auto charsetNode = element.namedItem(QLatin1String("CharacterSet"));
@@ -732,24 +782,33 @@ Vs2010ProjectData::Vs2010ProjectData(
                         }
 
                         auto runtimeLibraryNode = compileElement.namedItem(QLatin1String("RuntimeLibrary"));
+                        auto rtl = RTL_Other;
                         if (runtimeLibraryNode.isElement()) {
                             auto runtimeLibrary = runtimeLibraryNode.childNodes().at(0).nodeValue();
                             if (QLatin1String("MultiThreadedDLL") == runtimeLibrary) {
                                 target.compilerOptions << QLatin1String("/MD");
+                                rtl = RTL_MD;
                             } else if (QLatin1String("MultiThreadedDebugDLL") == runtimeLibrary) {
                                 target.compilerOptions << QLatin1String("/MDd");
+                                rtl = RTL_MDd;
                             } else if (QLatin1String("MultiThreaded") == runtimeLibrary) {
                                 target.compilerOptions << QLatin1String("/MT");
+                                rtl = RTL_MT;
                             } else if (QLatin1String("MultiThreadedDebug") == runtimeLibrary) {
                                 target.compilerOptions << QLatin1String("/MTd");
+                                rtl = RTL_MTd;
                             }
                         } else { // omitted, assume defaults derived from configuration names
                             if (configurationName == Debug) {
                                 target.compilerOptions << QLatin1String("/MDd");
+                                rtl = RTL_MDd;
                             } else if (configurationName == Release) {
                                 target.compilerOptions << QLatin1String("/MD");
+                                rtl = RTL_MD;
                             }
                         }
+
+                        addDefaultDefines(target.defines, platformName, rtl);
 
                         QDomElement linkElement = element.namedItem(QLatin1String("Link")).toElement();
                         auto outputFileNode = linkElement.namedItem(QLatin1String("OutputFile"));

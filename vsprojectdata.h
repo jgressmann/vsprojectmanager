@@ -44,11 +44,19 @@ namespace VsProjectManager {
 namespace Internal {
 
 enum TargetType {
-    ExecutableType = 0,
-    StaticLibraryType = 2,
-    DynamicLibraryType = 3,
-    UtilityType = 64,
-    Other
+    TT_ExecutableType = 0,
+    TT_StaticLibraryType = 2,
+    TT_DynamicLibraryType = 3,
+    TT_UtilityType = 64,
+    TT_Other
+};
+
+enum RuntimeLibraryType {
+    RTL_MT,
+    RTL_MTd,
+    RTL_MD,
+    RTL_MDd,
+    RTL_Other
 };
 
 class VsBuildTarget
@@ -99,8 +107,10 @@ protected:
     const Utils::FileName& projectFilePath() const { return m_projectFilePath; }
     const QDir& projectDirectory() const { return m_projectDirectory; }
     void addDefaultIncludeDirectories(QStringList& includes) const;
+    void addDefaultDefines(QByteArray& defines, const QString& platform, RuntimeLibraryType rtl) const;
     void setInstallDir(const QDir& dir) { m_installDirectory = dir; }
     const QDir& installDir() const { return m_installDirectory; }
+
 
 private:
     void devenvProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
@@ -150,7 +160,11 @@ private:
 class Vs2010ProjectData : public VsProjectData
 {
 public:
-    Vs2010ProjectData(const Utils::FileName& projectFile, const QDomDocument& doc, const char* toolsEnvVarName);
+    Vs2010ProjectData(
+            const Utils::FileName& projectFile,
+            const QDomDocument& doc,
+            const char* toolsEnvVarName,
+            unsigned mscVer);
 
 public:
     virtual VsBuildTargets targets() const override;

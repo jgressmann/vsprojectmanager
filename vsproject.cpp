@@ -352,7 +352,7 @@ QStringList VsProject::buildTargetTitles(bool runnable) const
     const QList<VsBuildTarget> targets
             = runnable ? Utils::filtered(buildTargets(),
                                          [](const VsBuildTarget &target) {
-                                             return !target.output.isEmpty() && target.targetType == ExecutableType;
+                                             return !target.output.isEmpty() && target.targetType == TT_ExecutableType;
                                          })
                        : buildTargets();
     return Utils::transform(targets, [](const VsBuildTarget &target) { return target.title; });
@@ -540,9 +540,9 @@ void VsProject::updateApplicationAndDeploymentTargets()
         if (vt.output.isEmpty())
             continue;
 
-        if (vt.targetType == ExecutableType || vt.targetType == DynamicLibraryType)
+        if (vt.targetType == TT_ExecutableType || vt.targetType == TT_DynamicLibraryType)
             deploymentData.addFile(vt.output, deploymentPrefix + buildDir.relativeFilePath(QFileInfo(vt.output).dir().path()), ProjectExplorer::DeployableFile::TypeExecutable);
-        if (vt.targetType == ExecutableType) {
+        if (vt.targetType == TT_ExecutableType) {
             // TODO: Put a path to corresponding .cbp file into projectFilePath?
             appTargetList.list << ProjectExplorer::BuildTargetInfo(vt.title,
                                                   Utils::FileName::fromString(vt.output),
@@ -573,7 +573,7 @@ void VsProject::updateTargetRunConfigurations(ProjectExplorer::Target *t)
     QHash<QString, const VsBuildTarget *> buildTargetHash;
     const QList<VsBuildTarget> buildTargetList = buildTargets();
     foreach (const VsBuildTarget &bt, buildTargetList) {
-        if (bt.targetType != ExecutableType || bt.output.isEmpty())
+        if (bt.targetType != TT_ExecutableType || bt.output.isEmpty())
             continue;
 
         buildTargetHash.insert(bt.title, &bt);
