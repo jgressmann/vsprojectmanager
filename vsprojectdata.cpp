@@ -752,7 +752,11 @@ Vs2010ProjectData::Vs2010ProjectData(
                                     }
                                 } else if (element.nodeName() == QLatin1String("OutDir")) {
                                     if (element.attribute(QLatin1String("Condition")) == condition) {
-                                        target.outdir = QDir::fromNativeSeparators(element.childNodes().at(0).nodeValue());
+                                        sub[_OutDir] = QDir::fromNativeSeparators(element.childNodes().at(0).nodeValue());
+                                    }
+                                } else if (element.nodeName() == QLatin1String("IntDir")) {
+                                    if (element.attribute(QLatin1String("Condition")) == condition) {
+                                        sub[_IntDir] = QDir::fromNativeSeparators(element.childNodes().at(0).nodeValue());
                                     }
                                 }
                             }
