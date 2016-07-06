@@ -31,8 +31,9 @@ Download
 --------
 
 * binary for [Qt Creator 3.6.1](https://www.dropbox.com/s/7dkpx47bx5kmul1/VsProjectManager.dll?dl=1)
-* binary for [Qt Creator 4.0.0](https://www.dropbox.com/s/7hx171zhimgz0mw/VsProjectManager.dll?dl=1)
+* binary for [Qt Creator 4.0.0](https://dl.dropboxusercontent.com/u/49168713/vsprojectmanager/4.0.0/VsProjectManager.dll)
 * binary for [Qt Creator 4.0.1](https://dl.dropboxusercontent.com/u/49168713/vsprojectmanager/4.0.1/VsProjectManager.dll)
+* binary for [Qt Creator 4.0.2](https://dl.dropboxusercontent.com/u/49168713/vsprojectmanager/4.0.2/VsProjectManager.dll)
 
 Installation
 ------------
