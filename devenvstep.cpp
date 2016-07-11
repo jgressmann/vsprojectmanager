@@ -59,55 +59,28 @@ const char DEVENV_STEP_CONFIGURATION_KEY[] = "VsProjectManager.DevenvStep.Config
 DevenvStepFactory::DevenvStepFactory(QObject *parent) : IBuildStepFactory(parent)
 { setObjectName(QLatin1String("VsProjectManager::DevenvStepFactory")); }
 
-QList<Core::Id> DevenvStepFactory::availableCreationIds(BuildStepList *parent) const
+QList<ProjectExplorer::BuildStepInfo> DevenvStepFactory::availableSteps(ProjectExplorer::BuildStepList *parent) const
 {
-    if (parent->target()->project()->id() == PROJECT_ID)
-        return QList<Core::Id>() << Core::Id(DEVENV_STEP_ID);
-    return QList<Core::Id>();
-}
+    if (parent->target()->project()->id() != PROJECT_ID)
+        return {};
 
-QString DevenvStepFactory::displayNameForId(Core::Id id) const
-{
-    if (id == DEVENV_STEP_ID)
-        return tr("Run", "Display name for VsProjectManager::DevenvStep id.");
-    return QString();
-}
-
-bool DevenvStepFactory::canCreate(BuildStepList *parent, Core::Id id) const
-{
-    if (parent->target()->project()->id() == PROJECT_ID)
-        return id == DEVENV_STEP_ID;
-    return false;
+    QString display = tr("Run", "Display name for VsProjectManager::DevenvStep id.");
+    return {{ DEVENV_STEP_ID, display }};
 }
 
 BuildStep *DevenvStepFactory::create(BuildStepList *parent, Core::Id id)
 {
-    if (!canCreate(parent, id))
-        return nullptr;
+    Q_UNUSED(id);
     return new DevenvStep(parent);
-}
-
-bool DevenvStepFactory::canClone(BuildStepList *parent, BuildStep *source) const
-{
-    return canCreate(parent, source->id());
 }
 
 BuildStep *DevenvStepFactory::clone(BuildStepList *parent, BuildStep *source)
 {
-    if (!canClone(parent, source))
-        return nullptr;
     return new DevenvStep(parent, static_cast<DevenvStep *>(source));
-}
-
-bool DevenvStepFactory::canRestore(BuildStepList *parent, const QVariantMap &map) const
-{
-    return canCreate(parent, idFromMap(map));
 }
 
 BuildStep *DevenvStepFactory::restore(BuildStepList *parent, const QVariantMap &map)
 {
-    if (!canRestore(parent, map))
-        return 0;
     DevenvStep *bs = new DevenvStep(parent);
     if (bs->fromMap(map))
         return bs;
@@ -181,7 +154,7 @@ bool DevenvStep::init(QList<const BuildStep *> &earlierSteps)
     auto project = static_cast<VsProject*>(bc->target()->project());
     QString cmd;
     QString args;
-	if (project && project->vsProjectData()) {
+    if (project && project->vsProjectData()) {
         if (m_clean) {
             project->vsProjectData()->cleanCmd(bc->displayName(), &cmd, &args);
         } else {
