@@ -38,7 +38,7 @@ QT_FORWARD_DECLARE_CLASS(QDir)
 namespace Utils {
 class FileSystemWatcher;
 class FileName;
-}
+} // namespace Utils
 
 
 namespace Core { class IDocument; }
@@ -57,6 +57,7 @@ class VsConfigurationFactory;
 class VsProjectFile;
 class VsProjectNode;
 class VsManager;
+class VsProjectFolder;
 
 
 class VsProject : public ProjectExplorer::Project
@@ -98,18 +99,14 @@ private:
     void parsingStarted();
     void parsingFinished();
     void onFileChanged(const QString &file);
-
-
-    QList<ProjectExplorer::Node *> nodes(ProjectExplorer::FolderNode *parent) const;
-
     void updateCppCodeModel();
 
-    void buildTree(VsProjectNode *rootNode, QList<ProjectExplorer::FileNode *> newList);
+    void buildTree();
+    void buildTreeRec(ProjectExplorer::FolderNode* parent, const VsProjectFolder* folder) const;
     void gatherFileNodes(ProjectExplorer::FolderNode *parent, QList<ProjectExplorer::FileNode *> &list) const;
-    ProjectExplorer::FolderNode *findOrCreateFolder(VsProjectNode *rootNode, QString directory);
 
 private:
-    /// Watches project files for changes.
+    // Watches project files for changes.
     Utils::FileSystemWatcher *m_fileWatcher;
 
     QFuture<void> m_codeModelFuture;

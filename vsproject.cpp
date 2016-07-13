@@ -70,7 +70,6 @@
 using namespace VsProjectManager;
 using namespace VsProjectManager::Internal;
 
-
 VsProject::~VsProject()
 {
     setRootProjectNode(nullptr);
@@ -93,8 +92,6 @@ VsProject::VsProject(VsManager *manager, const QString &fileName) :
 
     connect(this, &VsProject::activeTargetChanged, this, &VsProject::handleActiveTargetChanged);
     connect(m_fileWatcher, &Utils::FileSystemWatcher::fileChanged, this, &VsProject::onFileChanged);
-
-    m_fileWatcher->addFile(fileName, Utils::FileSystemWatcher::WatchAllChanges);
 
     loadProjectTree();
 }
@@ -155,8 +152,18 @@ ProjectExplorer::Project::RestoreResult VsProject::fromMap(const QVariantMap &ma
 void VsProject::loadProjectTree()
 {
     parsingStarted();
+
+    if (m_vsProjectData) {
+        m_fileWatcher->removeFiles(m_vsProjectData->filesToWatch());
+    }
+
     delete m_vsProjectData;
+
     m_vsProjectData = VsProjectData::load(projectFilePath());
+    if (m_vsProjectData) {
+        m_fileWatcher->addFiles(m_vsProjectData->filesToWatch(), Utils::FileSystemWatcher::WatchAllChanges);
+    }
+
     parsingFinished();
 }
 
@@ -169,15 +176,7 @@ void VsProject::parsingFinished()
 {
     QApplication::restoreOverrideCursor();
 
-    QList<ProjectExplorer::FileNode*> fileNodes;
-    if (m_vsProjectData) {
-            fileNodes = Utils::transform(m_vsProjectData->files(), [](const QString& filePath) {
-        return new ProjectExplorer::FileNode(
-                    Utils::FileName::fromString(filePath),
-                    getFileType(filePath), false); });
-    }
-
-    buildTree(static_cast<VsProjectNode *>(rootProjectNode()), fileNodes);
+    buildTree();
 
     emit fileListChanged();
 
@@ -209,21 +208,6 @@ bool VsProject::needsConfiguration() const
 bool VsProject::requiresTargetPanel() const
 {
     return !targets().isEmpty();
-}
-
-QList<ProjectExplorer::Node *> VsProject::nodes(ProjectExplorer::FolderNode *parent) const
-{
-    QList<ProjectExplorer::Node *> list;
-    QTC_ASSERT(parent != 0, return list);
-
-    foreach (ProjectExplorer::FolderNode *folder, parent->subFolderNodes()) {
-        list.append(nodes(folder));
-        list.append(folder);
-    }
-    foreach (ProjectExplorer::FileNode *file, parent->fileNodes())
-        list.append(file);
-
-    return list;
 }
 
 void VsProject::updateCppCodeModel()
@@ -405,77 +389,52 @@ static bool sortNodesByPath(ProjectExplorer::Node *a, ProjectExplorer::Node *b)
 }
 
 
-void VsProject::buildTree(VsProjectNode *rootNode, QList<ProjectExplorer::FileNode *> newList)
+void VsProject::buildTree()
 {
-    // Gather old list
-    QList<ProjectExplorer::FileNode *> oldList;
-    gatherFileNodes(rootNode, oldList);
-    Utils::sort(oldList, sortNodesByPath);
-    Utils::sort(newList, sortNodesByPath);
-
-    QList<ProjectExplorer::FileNode *> added;
-    QList<ProjectExplorer::FileNode *> deleted;
-
-    ProjectExplorer::compareSortedLists(oldList, newList, deleted, added, sortNodesByPath);
-
-    qDeleteAll(ProjectExplorer::subtractSortedList(newList, added, sortNodesByPath));
-
-    // add added nodes
-    foreach (ProjectExplorer::FileNode *fn, added) {
-        // Get relative path to rootNode
-        QString parentDir = fn->filePath().toFileInfo().absolutePath();
-        ProjectExplorer::FolderNode *folder = findOrCreateFolder(rootNode, parentDir);
-        folder->addFileNodes(QList<ProjectExplorer::FileNode *>()<< fn);
+    auto rootNode = static_cast<VsProjectNode*>(rootProjectNode());
+    // clear root node
+    {
+        auto fileNodes = rootNode->fileNodes();
+        auto subFolderNodes = rootNode->subFolderNodes();
+        auto subProjectNodes = rootNode->subProjectNodes();
+        rootNode->removeFileNodes(fileNodes);
+        rootNode->removeFolderNodes(subFolderNodes);
+        rootNode->removeProjectNodes(subProjectNodes);
     }
 
-    // remove old file nodes and check whether folder nodes can be removed
-    foreach (ProjectExplorer::FileNode *fn, deleted) {
-        ProjectExplorer::FolderNode *parent = fn->parentFolderNode();
-        parent->removeFileNodes(QList<ProjectExplorer::FileNode *>() << fn);
-
-        // Check for empty parent
-        while (parent != rootNode &&
-               parent->subFolderNodes().isEmpty() &&
-               parent->fileNodes().isEmpty()) {
-            ProjectExplorer::FolderNode *grandparent = parent->parentFolderNode();
-            grandparent->removeFolderNodes(QList<ProjectExplorer::FolderNode *>() << parent);
-            parent = grandparent;
-        }
+    if (m_vsProjectData) {
+        buildTreeRec(rootNode, m_vsProjectData->rootFolder());
     }
 }
 
-ProjectExplorer::FolderNode *VsProject::findOrCreateFolder(VsProjectNode *rootNode, QString directory)
+void VsProject::buildTreeRec(ProjectExplorer::FolderNode* parent, const VsProjectFolder* folder) const
 {
+    QTC_ASSERT(parent, return;);
+    QTC_ASSERT(folder, return;);
 
-    Utils::FileName path = rootNode->filePath().parentDir();
-    QDir rootParentDir(path.toString());
-    QString relativePath = rootParentDir.relativeFilePath(directory);
-    if (relativePath == QLatin1String("."))
-        relativePath.clear();
-    QStringList parts = relativePath.split(QLatin1Char('/'), QString::SkipEmptyParts);
-    ProjectExplorer::FolderNode *parent = rootNode;
-    foreach (const QString &part, parts) {
-        path.appendPath(part);
-        // Find folder in subFolders
-        bool found = false;
-        foreach (ProjectExplorer::FolderNode *folder, parent->subFolderNodes()) {
-
-            if (folder->filePath() == path) {
-                // yeah found something :)
-                parent = folder;
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            // No FolderNode yet, so create it
-            auto tmp = new ProjectExplorer::FolderNode(path);
-            tmp->setDisplayName(part);
-            parent->addFolderNodes(QList<ProjectExplorer::FolderNode *>() << tmp);
-            parent = tmp;
-        }
+    auto projectDirectory = Utils::FileName::fromString(m_vsProjectData->projectDirectory().absolutePath());
+    QList<ProjectExplorer::FileNode*> fileNodes;
+    foreach (const QString& filePath, folder->Files) {
+        fileNodes << new ProjectExplorer::FileNode(Utils::FileName::fromString(filePath), getFileType(filePath), false);
     }
-    return parent;
+    parent->addFileNodes(fileNodes);
+
+    // create filter nodes
+    QStringList subFolderNames = folder->SubFolders.keys();
+    std::sort(subFolderNames.begin(), subFolderNames.end());
+    for (int i = 0; i < subFolderNames.size(); ++i) {
+        const QString& folderName = subFolderNames[i];
+        auto folderNode = new ProjectExplorer::VirtualFolderNode(projectDirectory, subFolderNames.size() - 1 - i);
+        folderNode->setDisplayName(folderName);
+        parent->addFolderNodes({ folderNode });
+        buildTreeRec(folderNode, folder->SubFolders.value(folderName));
+    }
+
+    auto projectParent = parent->asProjectNode();
+    if (projectParent) {
+        // TODO
+
+    }
 }
 
 void VsProject::gatherFileNodes(ProjectExplorer::FolderNode *parent, QList<ProjectExplorer::FileNode *> &list) const
