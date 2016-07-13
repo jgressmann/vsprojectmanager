@@ -126,7 +126,38 @@ HWND findMainWindow(DWORD processId)
     return data.bestHandle;
 }
 
+bool IsKnownNodeName(const QString& name)
+{
+    return
+            /* VS2010 */
+            name == QLatin1String("CustomBuild") ||
+            name == QLatin1String("ClCompile") ||
+            name == QLatin1String("Midl") ||
+            name == QLatin1String("None") ||
+            name == QLatin1String("ResourceCompile") ||
+            /* VS2013 (and up?) */
+            name == QLatin1String("ClInclude") ||
+            name == QLatin1String("FxCompile") /* shaders */ ||
+            name == QLatin1String("Image") ||
+            name == QLatin1String("Text") ||
+            name == QLatin1String("Xml") ||
+            false;
+}
+
 } // namespace
+
+
+////////////////////////////////////////////////////////////////////////////////
+VsProjectFolder::~VsProjectFolder()
+{
+    QHash<QString, VsProjectFolder*>::iterator it = SubFolders.begin();
+    QHash<QString, VsProjectFolder*>::iterator end = SubFolders.end();
+    while (it != end) {
+        delete it.value();
+        ++it;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 VsProjectData::~VsProjectData()
@@ -321,6 +352,21 @@ void VsProjectData::releaseDevenvProcess()
     }
 }
 
+QStringList VsProjectData::files() const
+{
+    QStringList files;
+    collectFiles(files, m_rootFolder);
+    return files;
+}
+
+void VsProjectData::collectFiles(QStringList& files, const VsProjectFolder& folder)
+{
+    files << folder.Files;
+    for (auto subFolder : folder.SubFolders) {
+        collectFiles(files, *subFolder);
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const QDomDocument& doc)
     : VsProjectData(projectFile, doc)
@@ -333,6 +379,7 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
 
     m_vcvarsPath  = QDir::toNativeSeparators(installDir.absoluteFilePath(QLatin1String("VC/vcvarsall.bat")));
     m_solutionDir = projectDirectory().path();
+    m_filesToWatch << projectFile.toFileInfo().absoluteFilePath();
 
     auto configurationNodes = doc.documentElement().namedItem(QLatin1String("Configurations")).childNodes();
     m_targets.reserve(configurationNodes.size());
@@ -479,7 +526,7 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
 
         // parse <Files> section in the context of this configuration
         auto filesChildNodes = doc.documentElement().namedItem(QLatin1String("Files")).childNodes();
-        parseFilter(filesChildNodes, key, m_files);
+        parseFilter(filesChildNodes, key, *rootFolder());
 
         target.outdir = substitute(target.outdir, sub);
         target.outdir = makeAbsoluteFilePath(target.outdir);
@@ -488,30 +535,27 @@ Vs2005ProjectData::Vs2005ProjectData(const Utils::FileName& projectFile, const Q
 
         m_targets << target;
     }
-
-    std::sort(m_files.begin(), m_files.end());
-    m_files.erase(std::unique(m_files.begin(), m_files.end()), m_files.end());
 }
 
 void Vs2005ProjectData::parseFilter(
         const QDomNodeList& xmlItems,
         const QString& configuration,
-        QStringList& files) const
+        VsProjectFolder& parentFolder) const
 {
     QFileInfo fi;
     for (auto i = 0; i < xmlItems.count(); ++i) {
-        const auto& fileNode = xmlItems.at(i);
-        if (fileNode.nodeType() == QDomNode::ElementNode) {
-            if (fileNode.nodeName() == QLatin1String("File")) {
+        const auto& node = xmlItems.at(i);
+        if (node.nodeType() == QDomNode::ElementNode) {
+            if (node.nodeName() == QLatin1String("File")) {
 
-                auto relPath = fileNode.attributes().namedItem(QLatin1String("RelativePath")).nodeValue();
+                auto relPath = node.attributes().namedItem(QLatin1String("RelativePath")).nodeValue();
                 fi.setFile(projectDirectory(), relPath);
 
                 auto include = true;
-                auto fileNodeChildren = fileNode.childNodes();
+                auto fileNodeChildren = node.childNodes();
                 for (auto j = 0; j < fileNodeChildren.count(); ++j) {
                     auto fileNodeChild = fileNodeChildren.at(j);
-                    if (fileNode.nodeType() == QDomNode::ElementNode &&
+                    if (node.nodeType() == QDomNode::ElementNode &&
                         fileNodeChild.nodeName() == QLatin1String("FileConfiguration")) {
                         include = fileNodeChild.attributes().namedItem(QLatin1String("Name")).nodeValue() == configuration;
                         if (include) {
@@ -521,26 +565,28 @@ void Vs2005ProjectData::parseFilter(
                 }
 
                 if (include) {
-                    files << QDir::cleanPath(fi.absoluteFilePath());
+                    parentFolder.Files << QDir::cleanPath(fi.absoluteFilePath());
                 }
             } else {
-                 if (fileNode.nodeName() == QLatin1String("Filter")) {
-                     parseFilter(fileNode.childNodes(), configuration, files);
+                 if (node.nodeName() == QLatin1String("Filter")) {
+                     auto filterName = node.attributes().namedItem(QLatin1String("Name")).nodeValue();
+                     VsProjectFolder* filterFolder = new VsProjectFolder();
+                     parentFolder.SubFolders.insert(filterName, filterFolder);
+                     parseFilter(node.childNodes(), configuration, *filterFolder);
                  }
             }
         }
     }
 }
 
-
 VsBuildTargets Vs2005ProjectData::targets() const
 {
     return m_targets;
 }
 
-QStringList Vs2005ProjectData::files() const
+QStringList Vs2005ProjectData::filesToWatch() const
 {
-    return m_files;
+    return m_filesToWatch;
 }
 
 void Vs2005ProjectData::buildCmd(const QString& configuration, QString* cmd, QString* args) const
@@ -573,7 +619,6 @@ QStringList Vs2005ProjectData::configurations() const
 {
     return m_configurations;
 }
-
 
 QString Vs2005ProjectData::getDefaultOutputDirectory(const QString& platform)
 {
@@ -617,10 +662,13 @@ Vs2010ProjectData::Vs2010ProjectData(
 
     m_vcvarsPath  = QDir::toNativeSeparators(installDir.absoluteFilePath(QLatin1String("VC/vcvarsall.bat")));
     m_solutionDir = projectDirectory().path();
+    m_filesToWatch << projectFile.toFileInfo().absoluteFilePath();
 
     // _MSC_VER
     char mscVerDefine[32];
     _snprintf_s(mscVerDefine, _countof(mscVerDefine), _TRUNCATE, "#define _MSC_VER=%u\n", mscVer);
+
+    QStringList files;
 
     auto childNodes = doc.documentElement().childNodes();
     // first pass to pick up files and configurations
@@ -645,19 +693,8 @@ Vs2010ProjectData::Vs2010ProjectData(
                         if (childNode.isElement()) {
                             auto element = childNode.toElement();
                             auto name = element.nodeName();
-                            if (/* VS2010 */
-                                name == QLatin1String("ClCompile") ||
-                                name == QLatin1String("Midl") ||
-                                name == QLatin1String("None") ||
-                                name == QLatin1String("ResourceCompile") ||
-                                /* VS2013 (and up?) */
-                                name == QLatin1String("ClInclude") ||
-                                name == QLatin1String("FxCompile") /* shaders */ ||
-                                name == QLatin1String("Image") ||
-                                name == QLatin1String("Text") ||
-                                name == QLatin1String("Xml") ||
-                                false) {
-                                m_files << makeAbsoluteFilePath(element.attribute(QLatin1String("Include")));
+                            if (IsKnownNodeName(name)) {
+                                files << makeAbsoluteFilePath(element.attribute(QLatin1String("Include")));
                             }
                         }
                     }
@@ -834,8 +871,76 @@ Vs2010ProjectData::Vs2010ProjectData(
         m_targets << target;
     }
 
-    std::sort(m_files.begin(), m_files.end());
-    m_files.erase(std::unique(m_files.begin(), m_files.end()), m_files.end());
+//    std::sort(files.begin(), files.end());
+//    m_files.erase(std::unique(files.begin(), files.end()), files.end());
+
+    // build project folder hierarchy
+    QFileInfo filterFileInfo(projectDirectory().filePath(projectFile.toFileInfo().fileName() + QStringLiteral(".filters")));
+    if (filterFileInfo.exists()) {
+        m_filesToWatch << filterFileInfo.absoluteFilePath();
+
+        QFile file(filterFileInfo.absoluteFilePath());
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            qWarning("%s: %s", qPrintable(filterFileInfo.absoluteFilePath()), qPrintable(file.errorString()));
+            // backup plan, all files in root dir
+            rootFolder()->Files << files;
+        } else {
+            QDomDocument doc;
+            doc.setContent(&file);
+
+//            QHash<QString, void*> filterNames;
+
+            childNodes = doc.documentElement().childNodes();
+            // first pass to pick up files and configurations
+            for (auto i = 0; i < childNodes.count(); ++i) {
+                auto childNode = childNodes.at(i);
+                if (childNode.nodeType() == QDomNode::ElementNode) {
+                    QDomElement element = childNode.toElement();
+                    if (element.nodeName() == QLatin1String("ItemGroup")) {
+                        auto itemGroupChildNodes = element.childNodes();
+                        for (auto i = 0; i < itemGroupChildNodes.count(); ++i) {
+                            auto childNode = itemGroupChildNodes.at(i);
+                            if (childNode.nodeType() == QDomNode::ElementNode) {
+                                QDomElement element = childNode.toElement();
+                                auto name = element.nodeName();
+                                /*if (name == QLatin1String("Filter")) {
+                                    // build folder structure
+                                    auto filterName = element.attributes().namedItem(QLatin1Literal("Include")).nodeValue();
+                                    VsProjectFolder* parent = rootFolder();
+                                    foreach (const QString& pathComponent, filterName.split(QLatin1Char('\\'), QString::SkipEmptyParts)) {
+                                        auto it = parent->SubFolders.find(pathComponent);
+                                        if (it == parent->SubFolders.end()) {
+                                            it = parent->SubFolders.insert(pathComponent, new VsProjectFolder());
+                                        }
+
+                                        parent = it.value();
+                                    }
+                                } else */if (IsKnownNodeName(name)) {
+                                    auto filterElement = element.namedItem(QLatin1String("Filter")).toElement();
+                                    if (filterElement.isElement()) {
+                                        auto relFilePath = element.attributes().namedItem(QLatin1Literal("Include")).nodeValue();
+                                        auto filePath = makeAbsoluteFilePath(relFilePath);
+                                        auto filterName = filterElement.childNodes().at(0).nodeValue();
+                                        VsProjectFolder* parent = rootFolder();
+                                        foreach (const QString& pathComponent, filterName.split(QLatin1Char('\\'), QString::SkipEmptyParts)) {
+                                            auto it = parent->SubFolders.find(pathComponent);
+                                            if (it == parent->SubFolders.end()) {
+                                                it = parent->SubFolders.insert(pathComponent, new VsProjectFolder());
+                                            }
+
+                                            parent = it.value();
+                                        }
+
+                                        parent->Files << filePath;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 VsBuildTargets Vs2010ProjectData::targets() const
@@ -843,11 +948,10 @@ VsBuildTargets Vs2010ProjectData::targets() const
     return m_targets;
 }
 
-QStringList Vs2010ProjectData::files() const
+QStringList Vs2010ProjectData::filesToWatch() const
 {
-    return m_files;
+    return m_filesToWatch;
 }
-
 
 void Vs2010ProjectData::buildCmd(const QString& configuration, QString* cmd, QString* args) const
 {

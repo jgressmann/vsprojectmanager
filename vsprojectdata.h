@@ -78,6 +78,16 @@ public:
 
 typedef QList<VsBuildTarget> VsBuildTargets;
 
+class VsProjectFolder
+{
+public:
+    ~VsProjectFolder();
+    VsProjectFolder() = default;
+public:
+    QList<QString> Files;
+    QHash<QString, VsProjectFolder*> SubFolders;
+};
+
 class VsProjectData : public QObject
 {
     Q_OBJECT
@@ -91,21 +101,25 @@ public:
 public:
     virtual VsBuildTargets targets() const = 0;
     virtual QStringList configurations() const = 0;
-    virtual QStringList files() const = 0;
+    virtual QStringList filesToWatch() const = 0;
     virtual void buildCmd(const QString& configuration, QString* cmd, QString* args) const = 0;
     virtual void cleanCmd(const QString& configuration, QString* cmd, QString* args) const = 0;
     void openInDevenv();
+    const QDir& projectDirectory() const { return m_projectDirectory; }
+    const Utils::FileName& projectFilePath() const { return m_projectFilePath; }
+    QList<VsProjectData*> subProjects() const { return m_subProjects; }
+    VsProjectFolder* rootFolder() { return &m_rootFolder; }
+    QStringList files() const;
 
 protected:
     VsProjectData(const Utils::FileName& projectFile, const QDomDocument& doc);
+
 
 protected:
     static void splitConfiguration(const QString& configuration, QString* configurationName, QString* platformName);
     QString makeAbsoluteFilePath(const QString& path) const;
     static QString substitute(QString input, const VariableSubstitution& sub);
     const QDomDocument& doc() const { return m_doc; }
-    const Utils::FileName& projectFilePath() const { return m_projectFilePath; }
-    const QDir& projectDirectory() const { return m_projectDirectory; }
     void addDefaultIncludeDirectories(QStringList& includes) const;
     void addDefaultDefines(QByteArray& defines, const QString& platform, RuntimeLibraryType rtl) const;
     void setInstallDir(const QDir& dir) { m_installDirectory = dir; }
@@ -116,14 +130,16 @@ private:
     void devenvProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void devenvProcessErrorOccurred(QProcess::ProcessError error);
     void releaseDevenvProcess();
+    static void collectFiles(QStringList& files, const VsProjectFolder& folder);
 
 private:
     QDomDocument m_doc;
     Utils::FileName m_projectFilePath;
     QDir m_projectDirectory;
     QDir m_installDirectory;
-
     QProcess* m_devenvProcess = nullptr;
+    QList<VsProjectData*> m_subProjects;
+    VsProjectFolder m_rootFolder;
 };
 
 class Vs2005ProjectData : public VsProjectData
@@ -131,29 +147,29 @@ class Vs2005ProjectData : public VsProjectData
 public:
     Vs2005ProjectData(const Utils::FileName& projectFile, const QDomDocument& doc);
 public:
-    virtual VsBuildTargets targets() const override;
-    virtual QStringList configurations() const override;
-    virtual QStringList files() const override;
-    virtual void buildCmd(const QString& configuration, QString* cmd, QString* args) const override;
-    virtual void cleanCmd(const QString& configuration, QString* cmd, QString* args) const override;
+    VsBuildTargets targets() const override;
+    QStringList configurations() const override;
+    QStringList filesToWatch() const override;
+    void buildCmd(const QString& configuration, QString* cmd, QString* args) const override;
+    void cleanCmd(const QString& configuration, QString* cmd, QString* args) const override;
 
 private:
     void makeCmd(const QString& configuration, const QString& buildSwitch, QString& cmd, QString& args) const;
 
     void parseFilter(
-        const QDomNodeList& xmlItems,
-        const QString& configuration,
-        QStringList& files) const;
+            const QDomNodeList& xmlItems,
+            const QString& configuration,
+            VsProjectFolder& parentFolder) const;
     static QString getDefaultOutputDirectory(const QString& platform);
     static QString getDefaultIntDirectory(const QString& platform);
 
 private:
     VsBuildTargets m_targets;
     QStringList m_configurations;
-    QStringList m_files;
     QString m_devenvPath;
     QString m_vcvarsPath;
     QString m_solutionDir;
+    QStringList m_filesToWatch;
 };
 
 
@@ -167,11 +183,11 @@ public:
             unsigned mscVer);
 
 public:
-    virtual VsBuildTargets targets() const override;
-    virtual QStringList configurations() const override;
-    virtual QStringList files() const override;
-    virtual void buildCmd(const QString& configuration, QString* cmd, QString* args) const override;
-    virtual void cleanCmd(const QString& configuration, QString* cmd, QString* args) const override;
+    VsBuildTargets targets() const override;
+    QStringList configurations() const override;
+    QStringList filesToWatch() const override;
+    void buildCmd(const QString& configuration, QString* cmd, QString* args) const override;
+    void cleanCmd(const QString& configuration, QString* cmd, QString* args) const override;
 
 private:
     void makeCmd(const QString& configuration, const QString& buildSwitch, QString& cmd, QString& args) const;
@@ -181,9 +197,9 @@ private:
 private:
     VsBuildTargets m_targets;
     QStringList m_configurations;
-    QStringList m_files;
     QString m_vcvarsPath;
     QString m_solutionDir;
+    QStringList m_filesToWatch;
 };
 
 
