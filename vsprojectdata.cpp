@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <stdio.h>
 #include <Windows.h>
+//#include "Shlobj.h"
 
 #ifndef _countof
 #   define _countof(x) ((sizeof(x)/sizeof(x[0])))
@@ -55,9 +56,13 @@ const QString _SolutionDir(QStringLiteral("$(SolutionDir)"));
 const QString _TargetExt(QStringLiteral("$(TargetExt)"));
 const QString _TargetName(QStringLiteral("$(TargetName)"));
 const QString Debug(QStringLiteral("Debug"));
+const QString Filter(QStringLiteral("Filter"));
+const QString Include(QStringLiteral("Include"));
 const QString Release(QStringLiteral("Release"));
 const QString Win32(QStringLiteral("Win32"));
 const QString x64(QStringLiteral("x64"));
+
+
 
 
 
@@ -98,6 +103,7 @@ struct HandleData {
 };
 
 #pragma comment(lib, "User32.lib")
+//#pragma comment(lib, "Shell32.lib")
 
 
 BOOL isMainWindow(HWND handle)
@@ -683,7 +689,7 @@ Vs2010ProjectData::Vs2010ProjectData(
                         for (auto i = 0; i < projectConfigurationNodes.count(); ++i) {
                             auto childNode = projectConfigurationNodes.at(i);
                             if (childNode.isElement() && childNode.nodeName() == QLatin1String("ProjectConfiguration"))
-                                m_configurations << childNode.toElement().attribute(QLatin1String("Include"));
+                                m_configurations << childNode.toElement().attribute(Include);
                         }
                     }
                 } else { // no attributes
@@ -694,7 +700,7 @@ Vs2010ProjectData::Vs2010ProjectData(
                             auto element = childNode.toElement();
                             auto name = element.nodeName();
                             if (IsKnownNodeName(name)) {
-                                files << makeAbsoluteFilePath(element.attribute(QLatin1String("Include")));
+                                files << makeAbsoluteFilePath(element.attribute(Include));
                             }
                         }
                     }

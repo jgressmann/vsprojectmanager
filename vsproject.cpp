@@ -51,6 +51,7 @@
 #include <cpptools/projectpartbuilder.h>
 #include <coreplugin/icore.h>
 #include <coreplugin/icontext.h>
+#include <coreplugin/fileiconprovider.h>
 #include <qtsupport/baseqtversion.h>
 #include <qtsupport/qtkitinformation.h>
 #include <utils/qtcassert.h>
@@ -89,13 +90,14 @@ VsProject::VsProject(VsManager *manager, const QString &fileName) :
     setProjectLanguages(Core::Context(ProjectExplorer::Constants::LANG_CXX));
 
     rootProjectNode()->setDisplayName(projectFilePath().toFileInfo().absoluteDir().dirName());
+    auto icon = Core::FileIconProvider::icon(rootProjectNode()->filePath().toFileInfo());
+    rootProjectNode()->setIcon(icon);
 
     connect(this, &VsProject::activeTargetChanged, this, &VsProject::handleActiveTargetChanged);
     connect(m_fileWatcher, &Utils::FileSystemWatcher::fileChanged, this, &VsProject::onFileChanged);
 
     loadProjectTree();
 }
-
 
 QString VsProject::displayName() const
 {
