@@ -697,7 +697,8 @@ Vs2010ProjectData::Vs2010ProjectData(
                             auto element = childNode.toElement();
                             auto name = element.nodeName();
                             if (IsKnownNodeName(name)) {
-                                files << Utils::FileName::fromString(makeAbsoluteFilePath(element.attribute(Include)));
+                                auto partialFilePath = element.attribute(Include);
+                                files << Utils::FileName::fromString(makeAbsoluteFilePath(partialFilePath));
                             }
                         }
                     }
@@ -917,11 +918,12 @@ Vs2010ProjectData::Vs2010ProjectData(
                                     }
                                 } else */if (IsKnownNodeName(name)) {
                                     auto filterElement = element.namedItem(QLatin1String("Filter")).toElement();
-                                    if (filterElement.isElement()) {
-                                        auto relFilePath = element.attributes().namedItem(QLatin1Literal("Include")).nodeValue();
-                                        auto filePath = Utils::FileName::fromString(makeAbsoluteFilePath(relFilePath));
+                                    auto relFilePath = element.attributes().namedItem(QLatin1Literal("Include")).nodeValue();
+                                    auto filePath = Utils::FileName::fromString(makeAbsoluteFilePath(relFilePath));
+                                    VsProjectFolder* parent = rootFolder();
+
+                                    if (filterElement.isElement()) { // there is a filter node, else add to root
                                         auto filterName = filterElement.childNodes().at(0).nodeValue();
-                                        VsProjectFolder* parent = rootFolder();
                                         foreach (const QString& pathComponent, filterName.split(QLatin1Char('\\'), QString::SkipEmptyParts)) {
                                             auto it = parent->SubFolders.find(pathComponent);
                                             if (it == parent->SubFolders.end()) {
@@ -930,9 +932,9 @@ Vs2010ProjectData::Vs2010ProjectData(
 
                                             parent = it.value();
                                         }
-
-                                        parent->Files << filePath;
                                     }
+
+                                    parent->Files << filePath;
                                 }
                             }
                         }
