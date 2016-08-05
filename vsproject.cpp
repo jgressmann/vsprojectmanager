@@ -420,27 +420,31 @@ void VsProject::buildTreeRec(ProjectExplorer::FolderNode* parent, const VsProjec
     QTC_ASSERT(folder, return;);
 
     auto projectDirectory = Utils::FileName::fromString(m_vsProjectData->projectDirectory().absolutePath());
+
+    // create filter nodes
+    QStringList subFolderNames = folder->SubFolders.keys();
+    std::sort(subFolderNames.begin(), subFolderNames.end());
+    QList<ProjectExplorer::FolderNode*> subFolderNodes;
+    subFolderNodes.reserve(subFolderNames.size());
+    for (int i = 0; i < subFolderNames.size(); ++i) {
+        const QString& folderName = subFolderNames[i];
+        auto folderNode = new ProjectExplorer::VirtualFolderNode(projectDirectory, subFolderNames.size() - 1 - i);
+        folderNode->setDisplayName(folderName);
+        subFolderNodes << folderNode;
+    }
+
+    parent->addFolderNodes(subFolderNodes);
+
+    // add file nodes
     QList<ProjectExplorer::FileNode*> fileNodes;
     foreach (const Utils::FileName& filePath, folder->Files) {
         fileNodes << new ProjectExplorer::FileNode(filePath, getFileType(filePath.toString()), false);
     }
     parent->addFileNodes(fileNodes);
 
-    // create filter nodes
-    QStringList subFolderNames = folder->SubFolders.keys();
-    std::sort(subFolderNames.begin(), subFolderNames.end());
-    for (int i = 0; i < subFolderNames.size(); ++i) {
-        const QString& folderName = subFolderNames[i];
-        auto folderNode = new ProjectExplorer::VirtualFolderNode(projectDirectory, subFolderNames.size() - 1 - i);
-        folderNode->setDisplayName(folderName);
-        parent->addFolderNodes({ folderNode });
-        buildTreeRec(folderNode, folder->SubFolders.value(folderName));
-    }
-
-    auto projectParent = parent->asProjectNode();
-    if (projectParent) {
-        // TODO
-
+    // recurse
+    foreach (ProjectExplorer::FolderNode* folderNode, subFolderNodes) {
+        buildTreeRec(folderNode, folder->SubFolders.value(folderNode->displayName()));
     }
 }
 
