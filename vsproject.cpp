@@ -259,7 +259,8 @@ void VsProject::updateCppCodeModel()
         ppBuilder.setDefines(target.defines);
         ppBuilder.setDisplayName(target.title);
 
-        const QList<Core::Id> languages = ppBuilder.createProjectPartsForFiles(m_vsProjectData->files());
+        auto files = Utils::transform(m_vsProjectData->files(), [](const Utils::FileName &filePath) { return filePath.toString(); });
+        const QList<Core::Id> languages = ppBuilder.createProjectPartsForFiles(files);
         foreach (Core::Id language, languages)
             setProjectLanguage(language, true);
     }
@@ -420,8 +421,8 @@ void VsProject::buildTreeRec(ProjectExplorer::FolderNode* parent, const VsProjec
 
     auto projectDirectory = Utils::FileName::fromString(m_vsProjectData->projectDirectory().absolutePath());
     QList<ProjectExplorer::FileNode*> fileNodes;
-    foreach (const QString& filePath, folder->Files) {
-        fileNodes << new ProjectExplorer::FileNode(Utils::FileName::fromString(filePath), getFileType(filePath), false);
+    foreach (const Utils::FileName& filePath, folder->Files) {
+        fileNodes << new ProjectExplorer::FileNode(filePath, getFileType(filePath.toString()), false);
     }
     parent->addFileNodes(fileNodes);
 

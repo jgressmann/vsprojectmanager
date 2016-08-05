@@ -37,6 +37,7 @@
 #include <QHash>
 #include <QProcess>
 
+
 #include <utils/fileutils.h>
 
 
@@ -76,7 +77,11 @@ public:
     QByteArray defines;
 };
 
+
 typedef QList<VsBuildTarget> VsBuildTargets;
+
+class VsProjectFolder;
+typedef QHash<QString, VsProjectFolder*> DirectoryMap;
 
 class VsProjectFolder
 {
@@ -84,8 +89,9 @@ public:
     ~VsProjectFolder();
     VsProjectFolder() = default;
 public:
-    QList<QString> Files;
-    QHash<QString, VsProjectFolder*> SubFolders;
+
+    Utils::FileNameList Files;
+    DirectoryMap SubFolders;
 };
 
 class VsProjectData : public QObject
@@ -109,7 +115,8 @@ public:
     const Utils::FileName& projectFilePath() const { return m_projectFilePath; }
     QList<VsProjectData*> subProjects() const { return m_subProjects; }
     VsProjectFolder* rootFolder() { return &m_rootFolder; }
-    QStringList files() const;
+    Utils::FileNameList files() const;
+    static QByteArray readFile(const QString& filePath);
 
 protected:
     VsProjectData(const Utils::FileName& projectFile, const QDomDocument& doc);
@@ -130,7 +137,7 @@ private:
     void devenvProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void devenvProcessErrorOccurred(QProcess::ProcessError error);
     void releaseDevenvProcess();
-    static void collectFiles(QStringList& files, const VsProjectFolder& folder);
+    static void collectFiles(Utils::FileNameList& files, const VsProjectFolder& folder);
 
 private:
     QDomDocument m_doc;

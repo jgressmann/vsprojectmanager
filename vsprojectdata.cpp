@@ -27,11 +27,13 @@
 #include "vsprojectdata.h"
 
 #include <QFile>
+#include <QBuffer>
 
 #include <algorithm>
 #include <stdio.h>
 #include <Windows.h>
-//#include "Shlobj.h"
+
+#pragma comment(lib, "User32.lib")
 
 #ifndef _countof
 #   define _countof(x) ((sizeof(x)/sizeof(x[0])))
@@ -39,8 +41,6 @@
 
 namespace VsProjectManager {
 namespace Internal {
-
-//#define VSDEBUG
 
 namespace {
 
@@ -63,48 +63,10 @@ const QString Win32(QStringLiteral("Win32"));
 const QString x64(QStringLiteral("x64"));
 
 
-
-
-
-#ifdef VSDEBUG
-void Indent(FILE* f, int level)
-{
-    for (int i = 0; i < level; ++i)
-        fprintf(f, "  ");
-}
-
-void DumpXml(FILE* f, const QDomNode& node, int level)
-{
-    if (node.isElement()) {
-        Indent(f, level); fprintf(f, "<%s", qPrintable(node.nodeName()));
-        if (node.hasAttributes()) {
-            fprintf(stdout, " ");
-            QDomNamedNodeMap attrs = node.attributes();
-            for (int i = 0; i < attrs.size(); ++i) {
-                QDomNode attr = attrs.item(i);
-                fprintf(stdout, "\"%s\"=\"%s\"", qPrintable(attr.nodeName()), qPrintable(attr.nodeValue()));
-            }
-        }
-        fprintf(f, ">\n");
-        QDomNodeList children = node.childNodes();
-        for (int i = 0; i < children.size(); ++i) {
-            DumpXml(f, children.at(i), level + 1);
-        }
-        Indent(f, level); fprintf(f, "</%s>\n", qPrintable(node.nodeName()));
-    } else if (node.isText()) {
-        fprintf(f, "%s", qPrintable(node.nodeValue()));
-    }
-}
-#endif
-
 struct HandleData {
     DWORD processId;
     HWND bestHandle;
 };
-
-#pragma comment(lib, "User32.lib")
-//#pragma comment(lib, "Shell32.lib")
-
 
 BOOL isMainWindow(HWND handle)
 {
@@ -156,8 +118,8 @@ bool IsKnownNodeName(const QString& name)
 ////////////////////////////////////////////////////////////////////////////////
 VsProjectFolder::~VsProjectFolder()
 {
-    QHash<QString, VsProjectFolder*>::iterator it = SubFolders.begin();
-    QHash<QString, VsProjectFolder*>::iterator end = SubFolders.end();
+    DirectoryMap::iterator it = SubFolders.begin();
+    DirectoryMap::iterator end = SubFolders.end();
     while (it != end) {
         delete it.value();
         ++it;
@@ -187,16 +149,11 @@ VsProjectData* VsProjectData::load(const Utils::FileName& projectFilePath)
         return nullptr;
     }
 
+//    auto data = readFile(projectFilePath.toString());
+//    QBuffer file(&data);
+
     QDomDocument doc;
     doc.setContent(&file);
-
-#ifdef VSDEBUG
-    FILE* f = fopen("c:\\temp\\proj.xml", "w");
-    if (f) {
-        DumpXml(f, doc.documentElement(), 0);
-        fclose(f);
-    }
-#endif
 
     auto root = doc.documentElement();
     if (root.nodeName() == QLatin1String("VisualStudioProject")) {
@@ -358,19 +315,55 @@ void VsProjectData::releaseDevenvProcess()
     }
 }
 
-QStringList VsProjectData::files() const
+Utils::FileNameList VsProjectData::files() const
 {
-    QStringList files;
+    Utils::FileNameList files;
     collectFiles(files, m_rootFolder);
     return files;
 }
 
-void VsProjectData::collectFiles(QStringList& files, const VsProjectFolder& folder)
+void VsProjectData::collectFiles(Utils::FileNameList& files, const VsProjectFolder& folder)
 {
     files << folder.Files;
     for (auto subFolder : folder.SubFolders) {
         collectFiles(files, *subFolder);
     }
+}
+
+QByteArray VsProjectData::readFile(const QString& filePath)
+{
+    QByteArray result;
+    auto nativePath = QDir::toNativeSeparators(filePath);
+    HANDLE fileHandle = CreateFileW(
+                nativePath.toStdWString().c_str(),
+                GENERIC_READ,
+                FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE,
+                NULL, /* security attrs */
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                NULL /* template */);
+    if (INVALID_HANDLE_VALUE != fileHandle) {
+        LARGE_INTEGER size;
+        if (GetFileSizeEx(fileHandle, &size)) {
+            result.resize((int)size.QuadPart);
+            OVERLAPPED ov;
+            memset(&ov, 0, sizeof(ov));
+            for (int i = 0; i < result.size(); ) {
+                ov.Offset = i;
+                ov.OffsetHigh = static_cast<quint64>(i) >> 32;
+                int toRead = result.size() - i;
+                DWORD read = 0;
+                if (!ReadFile(fileHandle, result.data(), toRead, &read, &ov))
+                    break;
+
+                i += read;
+            }
+        }
+
+        CloseHandle(fileHandle);
+    }
+
+    return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -571,7 +564,7 @@ void Vs2005ProjectData::parseFilter(
                 }
 
                 if (include) {
-                    parentFolder.Files << QDir::cleanPath(fi.absoluteFilePath());
+                    parentFolder.Files << Utils::FileName::fromString(QDir::cleanPath(fi.absoluteFilePath()));
                 }
             } else {
                  if (node.nodeName() == QLatin1String("Filter")) {
@@ -583,6 +576,10 @@ void Vs2005ProjectData::parseFilter(
             }
         }
     }
+
+    // remove dups
+    std::sort(parentFolder.Files.begin(), parentFolder.Files.end());
+    parentFolder.Files.erase(std::unique(parentFolder.Files.begin(), parentFolder.Files.end()), parentFolder.Files.end());
 }
 
 VsBuildTargets Vs2005ProjectData::targets() const
@@ -674,7 +671,7 @@ Vs2010ProjectData::Vs2010ProjectData(
     char mscVerDefine[32];
     _snprintf_s(mscVerDefine, _countof(mscVerDefine), _TRUNCATE, "#define _MSC_VER=%u\n", mscVer);
 
-    QStringList files;
+    Utils::FileNameList files;
 
     auto childNodes = doc.documentElement().childNodes();
     // first pass to pick up files and configurations
@@ -700,7 +697,7 @@ Vs2010ProjectData::Vs2010ProjectData(
                             auto element = childNode.toElement();
                             auto name = element.nodeName();
                             if (IsKnownNodeName(name)) {
-                                files << makeAbsoluteFilePath(element.attribute(Include));
+                                files << Utils::FileName::fromString(makeAbsoluteFilePath(element.attribute(Include)));
                             }
                         }
                     }
@@ -877,9 +874,6 @@ Vs2010ProjectData::Vs2010ProjectData(
         m_targets << target;
     }
 
-//    std::sort(files.begin(), files.end());
-//    m_files.erase(std::unique(files.begin(), files.end()), files.end());
-
     // build project folder hierarchy
     QFileInfo filterFileInfo(projectDirectory().filePath(projectFile.toFileInfo().fileName() + QStringLiteral(".filters")));
     if (filterFileInfo.exists()) {
@@ -925,7 +919,7 @@ Vs2010ProjectData::Vs2010ProjectData(
                                     auto filterElement = element.namedItem(QLatin1String("Filter")).toElement();
                                     if (filterElement.isElement()) {
                                         auto relFilePath = element.attributes().namedItem(QLatin1Literal("Include")).nodeValue();
-                                        auto filePath = makeAbsoluteFilePath(relFilePath);
+                                        auto filePath = Utils::FileName::fromString(makeAbsoluteFilePath(relFilePath));
                                         auto filterName = filterElement.childNodes().at(0).nodeValue();
                                         VsProjectFolder* parent = rootFolder();
                                         foreach (const QString& pathComponent, filterName.split(QLatin1Char('\\'), QString::SkipEmptyParts)) {
