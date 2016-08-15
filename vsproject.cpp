@@ -96,6 +96,8 @@ VsProject::VsProject(VsManager *manager, const QString &fileName) :
     connect(this, &VsProject::activeTargetChanged, this, &VsProject::handleActiveTargetChanged);
     connect(m_fileWatcher, &Utils::FileSystemWatcher::fileChanged, this, &VsProject::onFileChanged);
 
+    m_fileWatcher->addFile(projectFilePath().toString(), Utils::FileSystemWatcher::WatchAllChanges);
+
     loadProjectTree();
 }
 
@@ -155,19 +157,11 @@ void VsProject::loadProjectTree()
 {
     parsingStarted();
 
-    if (m_vsProjectData) {
-        m_fileWatcher->removeFiles(m_vsProjectData->filesToWatch());
-    } else {
-        m_fileWatcher->removeFile(projectFilePath().toString());
-    }
-
     delete m_vsProjectData;
     m_vsProjectData = VsProjectData::load(projectFilePath());
 
     if (m_vsProjectData) {
         m_fileWatcher->addFiles(m_vsProjectData->filesToWatch(), Utils::FileSystemWatcher::WatchAllChanges);
-    } else {
-        m_fileWatcher->addFile(projectFilePath().toString(), Utils::FileSystemWatcher::WatchAllChanges);
     }
 
     parsingFinished();
